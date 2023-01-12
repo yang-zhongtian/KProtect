@@ -58,9 +58,7 @@ export default class VM {
             case 1 /* Header.LOAD_NUMBER */:
                 return this.byteArrayToLong(this.load8ByteArray());
             case 2 /* Header.POP_STACK */:
-                const val = this.stack[this.stack.length];
-                this.stack.length -= 1;
-                return val;
+                return this.stack.pop();
             case 4 /* Header.FETCH_DEPENDENCY */:
                 const depPointer = this.bytecode[this.programCounter++];
                 return this.dependencies[depPointer];
@@ -72,85 +70,86 @@ export default class VM {
     initOpcodeHandlers() {
         this.opcodeHandlers[0 /* Opcode.ADD */] = (vm) => {
             // in int array
-            const arg$1 = vm.stack[vm.stack.length - 2];
-            const arg$2 = vm.stack[vm.stack.length - 1];
-            vm.stack[vm.stack.length] = arg$1 + arg$2;
+            const arg$2 = vm.stack.pop();
+            const arg$1 = vm.stack.pop();
+            vm.stack.push(arg$1 + arg$2);
         };
         this.opcodeHandlers[1 /* Opcode.SUB */] = (vm) => {
-            const arg$1 = vm.stack[vm.stack.length - 2];
-            const arg$2 = vm.stack[vm.stack.length - 1];
-            vm.stack[vm.stack.length] = arg$1 - arg$2;
+            const arg$2 = vm.stack.pop();
+            const arg$1 = vm.stack.pop();
+            vm.stack.push(arg$1 - arg$2);
         };
         this.opcodeHandlers[2 /* Opcode.MUL */] = (vm) => {
-            const arg$1 = vm.stack[vm.stack.length - 2];
-            const arg$2 = vm.stack[vm.stack.length - 1];
-            vm.stack[vm.stack.length] = arg$1 * arg$2;
+            const arg$2 = vm.stack.pop();
+            const arg$1 = vm.stack.pop();
+            vm.stack.push(arg$1 * arg$2);
         };
         this.opcodeHandlers[3 /* Opcode.DIV */] = (vm) => {
-            const arg$1 = vm.stack[vm.stack.length - 2];
-            const arg$2 = vm.stack[vm.stack.length - 1];
-            vm.stack[vm.stack.length] = arg$1 / arg$2;
+            const arg$2 = vm.stack.pop();
+            const arg$1 = vm.stack.pop();
+            vm.stack.push(arg$1 / arg$2);
         };
         this.opcodeHandlers[4 /* Opcode.MOD */] = (vm) => {
-            const arg$1 = vm.stack[vm.stack.length - 2];
-            const arg$2 = vm.stack[vm.stack.length - 1];
-            vm.stack[vm.stack.length] = arg$1 % arg$2;
+            const arg$2 = vm.stack.pop();
+            const arg$1 = vm.stack.pop();
+            vm.stack.push(arg$1 % arg$2);
         };
         this.opcodeHandlers[5 /* Opcode.NEG */] = (vm) => {
-            const arg$1 = vm.stack[vm.stack.length - 1];
-            vm.stack[vm.stack.length] = !arg$1;
+            const arg$1 = vm.stack.pop();
+            vm.stack.push(!arg$1);
         };
         this.opcodeHandlers[14 /* Opcode.EQUAL */] = (vm) => {
-            const arg$1 = vm.stack[vm.stack.length - 2];
-            const arg$2 = vm.stack[vm.stack.length - 1];
-            vm.stack[vm.stack.length] = arg$1 == arg$2;
+            const arg$2 = vm.stack.pop();
+            const arg$1 = vm.stack.pop();
+            // noinspection EqualityComparisonWithCoercionJS
+            vm.stack.push(arg$1 == arg$2);
         };
         this.opcodeHandlers[6 /* Opcode.STORE */] = (vm) => {
             const dst = vm.getValue();
             vm.localVariables[dst] = vm.getValue();
         };
         this.opcodeHandlers[7 /* Opcode.GET_PROPERTY */] = (vm) => {
-            const base = vm.stack[vm.stack.length - 2];
-            const property = vm.stack[vm.stack.length - 1];
-            vm.stack[vm.stack.length] = base[property];
+            const property = vm.stack.pop();
+            const base = vm.stack.pop();
+            vm.stack.push(base[property]);
         };
         this.opcodeHandlers[13 /* Opcode.CALL */] = (vm) => {
-            const fn = vm.stack[vm.stack.length - 2];
-            const argArr = vm.stack[vm.stack.length - 1];
-            vm.stack[vm.stack.length] = fn(...argArr);
+            const argArr = vm.stack.pop();
+            const fn = vm.stack.pop();
+            vm.stack.push(fn.call(this, ...argArr));
         };
         this.opcodeHandlers[24 /* Opcode.PUSH */] = (vm) => {
-            vm.stack[vm.stack.length] = vm.getValue();
+            vm.stack.push(vm.getValue());
         };
         this.opcodeHandlers[25 /* Opcode.POP */] = (vm) => {
             const dst = vm.getValue();
             vm.localVariables[dst] = vm.stack.pop();
         };
         this.opcodeHandlers[26 /* Opcode.INIT_CONSTRUCTOR */] = (vm) => {
-            const c = vm.stack[vm.stack.length - 2];
-            const val = vm.stack[vm.stack.length - 1];
-            vm.stack[vm.stack.length] = new c(val);
+            const val = vm.stack.pop();
+            const c = vm.stack.pop();
+            vm.stack.push(new c(val));
         };
         this.opcodeHandlers[19 /* Opcode.STRICT_NOT_EQUAL */] = (vm) => {
-            const base = vm.stack[vm.stack.length - 2];
-            const property = vm.stack[vm.stack.length - 1];
-            vm.stack[vm.stack.length] = base !== property;
+            const arg$2 = vm.stack.pop();
+            const arg$1 = vm.stack.pop();
+            vm.stack.push(arg$1 !== arg$2);
         };
         this.opcodeHandlers[27 /* Opcode.INIT_ARRAY */] = (vm) => {
-            const v = vm.stack[vm.stack.length - 1];
-            vm.stack[vm.stack.length] = [v];
+            const v = vm.stack.pop();
+            vm.stack.push([v]);
         };
         this.opcodeHandlers[23 /* Opcode.NOT */] = (vm) => {
-            const expression = vm.stack[vm.stack.length - 1];
-            vm.stack[vm.stack.length] = !expression;
+            const expression = vm.stack.pop();
+            vm.stack.push(!expression);
         };
         this.opcodeHandlers[12 /* Opcode.TYPEOF */] = (vm) => {
-            const expression = vm.stack[vm.stack.length - 1];
-            vm.stack[vm.stack.length] = typeof expression;
+            const expression = vm.stack.pop();
+            vm.stack.push(typeof expression);
         };
         this.opcodeHandlers[22 /* Opcode.JMP_IF */] = (vm) => {
-            const expression = vm.stack[vm.stack.length - 2];
-            const label = vm.stack[vm.stack.length - 1];
+            const label = vm.stack.pop();
+            const expression = vm.stack.pop();
             if (expression) {
                 // JMP to specified location
                 // we keep a breakpoint to this
@@ -164,28 +163,27 @@ export default class VM {
                 // console.log('JMP', label)
                 vm.programCounter = location;
             }
-            // vm.stack[vm.stack.length] = typeof expression
         };
         this.opcodeHandlers[28 /* Opcode.EXIT */] = (vm) => {
             vm.exitToPreviousContext[0](vm);
             vm.exitToPreviousContext.shift();
         };
         this.opcodeHandlers[35 /* Opcode.AND */] = (vm) => {
-            const arg$1 = vm.stack[vm.stack.length - 2];
-            const arg$2 = vm.stack[vm.stack.length - 1];
-            vm.stack[vm.stack.length] = arg$1 && arg$2;
+            const arg$2 = vm.stack.pop();
+            const arg$1 = vm.stack.pop();
+            vm.stack.push(arg$1 && arg$2);
         };
         this.opcodeHandlers[36 /* Opcode.APPLY */] = (vm) => {
-            const fn = vm.stack[vm.stack.length - 3];
-            const obj = vm.stack[vm.stack.length - 2];
-            const args = vm.stack[vm.stack.length - 1];
-            vm.stack[vm.stack.length] = fn.apply(obj, args);
+            const args = vm.stack.pop();
+            const obj = vm.stack.pop();
+            const fn = vm.stack.pop();
+            vm.stack.push(fn.apply(obj, args));
         };
         this.opcodeHandlers[37 /* Opcode.CALL_MEMBER_EXPRESSION */] = (vm) => {
-            const obj = vm.stack[vm.stack.length - 3];
-            const property = vm.stack[vm.stack.length - 2];
-            const args = vm.stack[vm.stack.length - 1];
-            vm.stack[vm.stack.length] = obj[property].call(this, ...args);
+            const args = vm.stack.pop();
+            const property = vm.stack.pop();
+            const obj = vm.stack.pop();
+            vm.stack.push(obj[property].call(this, ...args));
         };
     }
     getInstructionHandler(opcode) {
@@ -193,7 +191,7 @@ export default class VM {
     }
     start() {
         while (this.programCounter < this.bytecode.length) {
-            console.log(this.exitToPreviousContext);
+            // console.log(this.exitToPreviousContext)
             const count = this.programCounter++;
             // console.log(count)
             const opcode = this.bytecode[count];
