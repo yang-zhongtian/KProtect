@@ -10,4 +10,4 @@ const bytecodeCompiler = new BytecodeCompiler(il);
 const vmArguments = bytecodeCompiler.compile();
 const result = JSON.stringify(vmArguments);
 writeFileSync(path.resolve(workingDir, 'bundle.json'), result);
-console.log(JSON.stringify(il, null, 2));
+// console.log(JSON.stringify(il, null, 2))

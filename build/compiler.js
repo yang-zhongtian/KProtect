@@ -218,7 +218,7 @@ export default class Compiler {
      * 处理二元运算符
      */
     translateBinaryExpression(node) {
-        if (node.left.type == 'PrivateName')
+        if (node.left.type === 'PrivateName')
             throw 'UNHANDLED_PRIVATE_NAME';
         const left = this.translateExpression(node.left);
         const right = this.translateExpression(node.right);
@@ -323,8 +323,8 @@ export default class Compiler {
                     console.error(node.object.name);
                     throw 'BASE_NOT_DEPENDENCY';
                 }
-                if (node.property.type != 'Identifier')
-                    throw 'UNSUPPORTED PROPERTY TYPE';
+                if (node.property.type !== 'Identifier')
+                    throw 'UNSUPPORTED_PROPERTY_TYPE';
                 break;
             case 'CallExpression':
                 this.pushCallExpressionOntoStack(node.object);
@@ -333,7 +333,7 @@ export default class Compiler {
                 console.error(node.object);
                 throw 'UNHANDLED_MEMBER_EXPRESSION_STATE';
         }
-        if (node.property.type != 'Identifier')
+        if (node.property.type !== 'Identifier')
             throw 'UNHANDLED_PROPERTY_TYPE';
         this.appendPushInstruction(this.createStringArgument(node.property.name));
     }
@@ -384,35 +384,43 @@ export default class Compiler {
         // TODO 转译while
     }
     translateIfStatement(node) {
-        if (node.consequent.type == 'BlockStatement') {
-            let block = {
-                instructions: [],
-                inheritsContext: true,
-            };
-            const label = `if_${node.start}:${node.end}`;
-            // push the expression onto the stack
-            this.appendPushInstruction(this.translateExpression(node.test));
-            this.appendJmpIfInstruction(this.createStringArgument(label));
-            this.il[label] = block;
-            this.blocks.unshift(block);
+        let block = {
+            instructions: [],
+            inheritsContext: true,
+        };
+        let label = `if_${node.start}:${node.end}`;
+        // push the expression onto the stack
+        this.appendPushInstruction(this.translateExpression(node.test));
+        this.appendJmpIfInstruction(this.createStringArgument(label));
+        this.il[label] = block;
+        this.blocks.unshift(block);
+        if (node.consequent.type === 'BlockStatement') {
             this.buildIL(node.consequent.body);
-            this.blocks.shift();
         }
-        if (node.alternate && node.alternate.type === 'BlockStatement') {
-            let block = {
-                instructions: [],
-                inheritsContext: true,
-            };
-            const label = `else_${node.start}:${node.end}`;
-            // push the expression onto the stack
-            this.appendPushInstruction(this.translateExpression(node.test));
-            this.appendNotInstruction();
-            this.appendJmpIfInstruction(this.createStringArgument(label));
-            this.il[label] = block;
-            this.blocks.unshift(block);
+        else {
+            this.buildIL([node.consequent]);
+        }
+        this.blocks.shift();
+        if (!node.alternate)
+            return;
+        block = {
+            instructions: [],
+            inheritsContext: true,
+        };
+        label = `else_${node.start}:${node.end}`;
+        // push the expression onto the stack
+        this.appendPushInstruction(this.translateExpression(node.test));
+        this.appendNotInstruction();
+        this.appendJmpIfInstruction(this.createStringArgument(label));
+        this.il[label] = block;
+        this.blocks.unshift(block);
+        if (node.alternate.type === 'BlockStatement') {
             this.buildIL(node.alternate.body);
-            this.blocks.shift();
         }
+        else {
+            this.buildIL([node.alternate]);
+        }
+        this.blocks.shift();
     }
     translateVariableDeclaration(node) {
         node.declarations.forEach(declaration => {
