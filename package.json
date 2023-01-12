@@ -1,0 +1,28 @@
+{
+  "name": "k-protect",
+  "version": "1.0.0",
+  "description": "K Protect",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "build": "tsc && rollup --config",
+    "protect": "tsc && node build/protect.js",
+    "bundle": "node cleanup.js && tsc && node build/protect.js && rollup --config"
+  },
+  "author": "Richard Yang",
+  "license": "MIT",
+  "devDependencies": {
+    "@babel/core": "^7.20.12",
+    "@babel/preset-env": "^7.20.2",
+    "@rollup/plugin-babel": "^6.0.3",
+    "@rollup/plugin-commonjs": "^24.0.0",
+    "@rollup/plugin-json": "^6.0.0",
+    "@rollup/plugin-node-resolve": "^15.0.1",
+    "@rollup/plugin-terser": "^0.3.0",
+    "@types/babel__core": "^7.1.20",
+    "@types/node": "^18.11.18",
+    "@types/pako": "^2.0.0",
+    "pako": "^2.1.0",
+    "rollup": "^3.9.1"
+  }
+}
