@@ -71,7 +71,7 @@ export default class VM {
     }
     jmpToBlock(location) {
         const pc = this.programCounter;
-        this.exitToPreviousContext.unshift(() => {
+        this.exitToPreviousContext.push(() => {
             this.programCounter = pc;
         });
         // console.log('JMP', label)
@@ -248,8 +248,10 @@ export default class VM {
             this.stack.push([v]);
         };
         this.opcodeHandlers[37 /* Opcode.EXIT */] = () => {
-            this.exitToPreviousContext[0]();
-            this.exitToPreviousContext.shift();
+            const func = this.exitToPreviousContext.pop();
+            if (func === undefined)
+                throw 'EMPTY_TRACEBACK';
+            func();
         };
         this.opcodeHandlers[38 /* Opcode.VOID */] = () => {
             throw 'UNFINISHED';

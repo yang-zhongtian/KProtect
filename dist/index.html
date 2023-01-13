@@ -1,9 +1,9 @@
 <html lang="en">
-<script src="vm.js"></script>
-<script>
+<script type="module">
+    import VM from './vm.es.js'
     (async () => {
-        let content = await fetch('../src/bundle.json')
-        content = JSON.parse(await content.text())
+        let content = await fetch('../protect/bundle.json')
+        content = await content.json()
         const vm = new VM(content.bytecode, content.strings, content.lookUpTable)
         vm.start()
     })()

@@ -9,7 +9,7 @@ export default class VM {
     private readonly opcodeHandlers: any[]
     private readonly stack: any[]
     private readonly localVariables: any[]
-    private readonly exitToPreviousContext: any[]
+    private readonly exitToPreviousContext: Function[]
     private programCounter: number
 
     constructor(bytecode: string, strings: string[], lookUpTable: { [index: string]: number }) {
@@ -98,7 +98,7 @@ export default class VM {
     private jmpToBlock(location: number) {
         const pc = this.programCounter
 
-        this.exitToPreviousContext.unshift(() => {
+        this.exitToPreviousContext.push(() => {
             this.programCounter = pc
         })
         // console.log('JMP', label)
@@ -297,8 +297,9 @@ export default class VM {
             this.stack.push([v])
         }
         this.opcodeHandlers[Opcode.EXIT] = () => {
-            this.exitToPreviousContext[0]()
-            this.exitToPreviousContext.shift()
+            const func = this.exitToPreviousContext.pop()
+            if (func === undefined) throw 'EMPTY_TRACEBACK'
+            func()
         }
         this.opcodeHandlers[Opcode.VOID] = () => {
             throw 'UNFINISHED'

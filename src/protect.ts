@@ -3,7 +3,7 @@ import {readFileSync, writeFileSync} from 'fs'
 import Compiler from './compiler.js'
 import BytecodeCompiler from './assembler.js'
 
-const workingDir = path.resolve(path.resolve(), 'src')
+const workingDir = path.resolve(path.resolve(), 'protect')
 const src = readFileSync(path.resolve(workingDir, 'src.js')).toString()
 const compiler = new Compiler(src)
 const il = compiler.compile()
