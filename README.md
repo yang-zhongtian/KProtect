@@ -60,13 +60,14 @@ production environment.
 
 ### VM architecture
 
-```text
-Global:
+#### Global
 * stack: runtime data storage
 * programCounter: current opcode index
 * localVariables: variable storage
 * exitToPreviousContext: traceback stack after exiting other blocks
-Core:
+
+#### Core
+```text
                     ┌────────────┬───────────────┬─────┐
   traceback stack:  │ mainExit() │ breakpoint1() │ ... │
                     └────────────┴───────────────┴─────┘
