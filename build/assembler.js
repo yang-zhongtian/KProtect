@@ -43,17 +43,19 @@ export default class BytecodeCompiler {
             const opcode = instruction.opcode;
             if (opcode === undefined)
                 throw 'UNHANDLED_OPCODE';
-            if (opcode === 22 /* Opcode.JMP_IF */) {
+            if (opcode === 23 /* Opcode.JMP_IF_ELSE */) {
                 // need to implement a jmp look up table
                 // console.log("JMP_IF", instruction.args[0])
                 // console.log(bytes.length)
                 // we need to put a placeholder of 9 bytes beforehand, so we can replace it later onwards when we add in the jmp locations
-                bytes.push(24 /* Opcode.PUSH */);
-                bytes.push(...this.compileInstructionArgument({
-                    type: 0 /* Header.LOAD_STRING */,
-                    value: instruction.args[0].value
-                    // TODO 已修改，原来是用label作为key完成xor
-                }));
+                for (let i = 0; i < 2; i++) {
+                    bytes.push(33 /* Opcode.PUSH */);
+                    console.log(instruction.args[i]);
+                    bytes.push(...this.compileInstructionArgument({
+                        type: instruction.args[i].type,
+                        value: instruction.args[i].value
+                    }));
+                }
                 bytes.push(opcode);
             }
             else {
@@ -70,7 +72,7 @@ export default class BytecodeCompiler {
             console.log(`Segment ${label}: ${bytes.length}`);
             this.lookUpTable[label] = bytes.length;
             this.compileBlock(block, bytes);
-            bytes.push(28 /* Opcode.EXIT */);
+            bytes.push(37 /* Opcode.EXIT */);
         }
         this.bytecode = Uint8Array.from(bytes);
         const buffer = deflateRaw(this.bytecode);

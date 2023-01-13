@@ -9,10 +9,10 @@ export default class VM {
         this.stack = [];
         this.localVariables = [];
         this.lookUpTable = lookUpTable;
-        this.exitToPreviousContext = [(vm) => {
+        this.exitToPreviousContext = [() => {
                 // if we call this function from main context then we just exit
-                vm.programCounter = vm.bytecode.length + 1;
-                // vm.programCounter = +inf
+                this.programCounter = this.bytecode.length + 1;
+                // this.programCounter = +inf
             }];
         this.programCounter = 0;
         this.initOpcodeHandlers();
@@ -51,143 +51,227 @@ export default class VM {
             case 0 /* Header.LOAD_STRING */:
                 const stringPointer = this.byteArrayToLong(this.load8ByteArray());
                 return this.strings[stringPointer];
-            case 6 /* Header.LOAD_ARRAY */:
-                return [];
-            case 7 /* Header.LOAD_OBJECT */:
-                return {};
             case 1 /* Header.LOAD_NUMBER */:
                 return this.byteArrayToLong(this.load8ByteArray());
             case 2 /* Header.POP_STACK */:
                 return this.stack.pop();
-            case 4 /* Header.FETCH_DEPENDENCY */:
-                const depPointer = this.bytecode[this.programCounter++];
-                return this.dependencies[depPointer];
             case 3 /* Header.FETCH_VARIABLE */:
                 const variable = this.bytecode[this.programCounter++];
                 return this.localVariables[variable];
+            case 4 /* Header.FETCH_DEPENDENCY */:
+                const depPointer = this.bytecode[this.programCounter++];
+                return this.dependencies[depPointer];
+            case 5 /* Header.LOAD_UNDEFINED */:
+                return undefined;
+            case 6 /* Header.LOAD_ARRAY */:
+                return [];
+            case 7 /* Header.LOAD_OBJECT */:
+                return {};
         }
     }
-    initOpcodeHandlers() {
-        this.opcodeHandlers[0 /* Opcode.ADD */] = (vm) => {
-            // in int array
-            const arg$2 = vm.stack.pop();
-            const arg$1 = vm.stack.pop();
-            vm.stack.push(arg$1 + arg$2);
-        };
-        this.opcodeHandlers[1 /* Opcode.SUB */] = (vm) => {
-            const arg$2 = vm.stack.pop();
-            const arg$1 = vm.stack.pop();
-            vm.stack.push(arg$1 - arg$2);
-        };
-        this.opcodeHandlers[2 /* Opcode.MUL */] = (vm) => {
-            const arg$2 = vm.stack.pop();
-            const arg$1 = vm.stack.pop();
-            vm.stack.push(arg$1 * arg$2);
-        };
-        this.opcodeHandlers[3 /* Opcode.DIV */] = (vm) => {
-            const arg$2 = vm.stack.pop();
-            const arg$1 = vm.stack.pop();
-            vm.stack.push(arg$1 / arg$2);
-        };
-        this.opcodeHandlers[4 /* Opcode.MOD */] = (vm) => {
-            const arg$2 = vm.stack.pop();
-            const arg$1 = vm.stack.pop();
-            vm.stack.push(arg$1 % arg$2);
-        };
-        this.opcodeHandlers[5 /* Opcode.NEG */] = (vm) => {
-            const arg$1 = vm.stack.pop();
-            vm.stack.push(!arg$1);
-        };
-        this.opcodeHandlers[14 /* Opcode.EQUAL */] = (vm) => {
-            const arg$2 = vm.stack.pop();
-            const arg$1 = vm.stack.pop();
-            // noinspection EqualityComparisonWithCoercionJS
-            vm.stack.push(arg$1 == arg$2);
-        };
-        this.opcodeHandlers[6 /* Opcode.STORE */] = (vm) => {
-            const dst = vm.getValue();
-            vm.localVariables[dst] = vm.getValue();
-        };
-        this.opcodeHandlers[7 /* Opcode.GET_PROPERTY */] = (vm) => {
-            const property = vm.stack.pop();
-            const base = vm.stack.pop();
-            vm.stack.push(base[property]);
-        };
-        this.opcodeHandlers[13 /* Opcode.CALL */] = (vm) => {
-            const argArr = vm.stack.pop();
-            const fn = vm.stack.pop();
-            vm.stack.push(fn.call(this, ...argArr));
-        };
-        this.opcodeHandlers[24 /* Opcode.PUSH */] = (vm) => {
-            vm.stack.push(vm.getValue());
-        };
-        this.opcodeHandlers[25 /* Opcode.POP */] = (vm) => {
-            const dst = vm.getValue();
-            vm.localVariables[dst] = vm.stack.pop();
-        };
-        this.opcodeHandlers[26 /* Opcode.INIT_CONSTRUCTOR */] = (vm) => {
-            const val = vm.stack.pop();
-            const c = vm.stack.pop();
-            vm.stack.push(new c(val));
-        };
-        this.opcodeHandlers[19 /* Opcode.STRICT_NOT_EQUAL */] = (vm) => {
-            const arg$2 = vm.stack.pop();
-            const arg$1 = vm.stack.pop();
-            vm.stack.push(arg$1 !== arg$2);
-        };
-        this.opcodeHandlers[27 /* Opcode.INIT_ARRAY */] = (vm) => {
-            const v = vm.stack.pop();
-            vm.stack.push([v]);
-        };
-        this.opcodeHandlers[23 /* Opcode.NOT */] = (vm) => {
-            const expression = vm.stack.pop();
-            vm.stack.push(!expression);
-        };
-        this.opcodeHandlers[12 /* Opcode.TYPEOF */] = (vm) => {
-            const expression = vm.stack.pop();
-            vm.stack.push(typeof expression);
-        };
-        this.opcodeHandlers[22 /* Opcode.JMP_IF */] = (vm) => {
-            const label = vm.stack.pop();
-            const expression = vm.stack.pop();
-            if (expression) {
-                // JMP to specified location
-                // we keep a breakpoint to this
-                const pc = vm.programCounter;
-                vm.exitToPreviousContext.unshift((vm) => {
-                    vm.programCounter = pc;
-                });
-                const location = vm.lookUpTable[label];
-                if (location === undefined)
-                    throw 'ILLEGAL JMP';
-                // console.log('JMP', label)
-                vm.programCounter = location;
-            }
-        };
-        this.opcodeHandlers[28 /* Opcode.EXIT */] = (vm) => {
-            vm.exitToPreviousContext[0](vm);
-            vm.exitToPreviousContext.shift();
-        };
-        this.opcodeHandlers[35 /* Opcode.AND */] = (vm) => {
-            const arg$2 = vm.stack.pop();
-            const arg$1 = vm.stack.pop();
-            vm.stack.push(arg$1 && arg$2);
-        };
-        this.opcodeHandlers[36 /* Opcode.APPLY */] = (vm) => {
-            const args = vm.stack.pop();
-            const obj = vm.stack.pop();
-            const fn = vm.stack.pop();
-            vm.stack.push(fn.apply(obj, args));
-        };
-        this.opcodeHandlers[37 /* Opcode.CALL_MEMBER_EXPRESSION */] = (vm) => {
-            const args = vm.stack.pop();
-            const property = vm.stack.pop();
-            const obj = vm.stack.pop();
-            vm.stack.push(obj[property].call(this, ...args));
-        };
+    jmpToBlock(location) {
+        const pc = this.programCounter;
+        this.exitToPreviousContext.unshift(() => {
+            this.programCounter = pc;
+        });
+        // console.log('JMP', label)
+        this.programCounter = location;
     }
-    getInstructionHandler(opcode) {
-        return this.opcodeHandlers[opcode];
+    initOpcodeHandlers() {
+        this.opcodeHandlers[0 /* Opcode.ADD */] = () => {
+            // in int array
+            const arg$2 = this.stack.pop();
+            const arg$1 = this.stack.pop();
+            this.stack.push(arg$1 + arg$2);
+        };
+        this.opcodeHandlers[1 /* Opcode.SUB */] = () => {
+            const arg$2 = this.stack.pop();
+            const arg$1 = this.stack.pop();
+            this.stack.push(arg$1 - arg$2);
+        };
+        this.opcodeHandlers[2 /* Opcode.MUL */] = () => {
+            const arg$2 = this.stack.pop();
+            const arg$1 = this.stack.pop();
+            this.stack.push(arg$1 * arg$2);
+        };
+        this.opcodeHandlers[3 /* Opcode.DIV */] = () => {
+            const arg$2 = this.stack.pop();
+            const arg$1 = this.stack.pop();
+            this.stack.push(arg$1 / arg$2);
+        };
+        this.opcodeHandlers[4 /* Opcode.MOD */] = () => {
+            const arg$2 = this.stack.pop();
+            const arg$1 = this.stack.pop();
+            this.stack.push(arg$1 % arg$2);
+        };
+        this.opcodeHandlers[5 /* Opcode.NEG */] = () => {
+            const arg$1 = this.stack.pop();
+            this.stack.push(!arg$1);
+        };
+        this.opcodeHandlers[6 /* Opcode.STORE */] = () => {
+            const dst = this.getValue();
+            this.localVariables[dst] = this.getValue();
+        };
+        this.opcodeHandlers[7 /* Opcode.GET_PROPERTY */] = () => {
+            const property = this.stack.pop();
+            const base = this.stack.pop();
+            this.stack.push(base[property]);
+        };
+        this.opcodeHandlers[8 /* Opcode.SET_PROPERTY */] = () => {
+            throw 'UNFINISHED';
+        };
+        this.opcodeHandlers[9 /* Opcode.EXISTS */] = () => {
+            throw 'UNFINISHED';
+        };
+        this.opcodeHandlers[10 /* Opcode.DELETE_PROPERTY */] = () => {
+            throw 'UNFINISHED';
+        };
+        this.opcodeHandlers[11 /* Opcode.IN */] = () => {
+            throw 'UNFINISHED';
+        };
+        this.opcodeHandlers[12 /* Opcode.INSTANCE_OF */] = () => {
+            throw 'UNFINISHED';
+        };
+        this.opcodeHandlers[13 /* Opcode.TYPEOF */] = () => {
+            const expression = this.stack.pop();
+            this.stack.push(typeof expression);
+        };
+        this.opcodeHandlers[14 /* Opcode.CALL */] = () => {
+            const argArr = this.stack.pop();
+            const fn = this.stack.pop();
+            this.stack.push(fn.call(this, ...argArr));
+        };
+        this.opcodeHandlers[15 /* Opcode.EQUAL */] = () => {
+            const arg$2 = this.stack.pop();
+            const arg$1 = this.stack.pop();
+            // noinspection EqualityComparisonWithCoercionJS
+            this.stack.push(arg$1 == arg$2);
+        };
+        this.opcodeHandlers[16 /* Opcode.NOT_EQUAL */] = () => {
+            const arg$2 = this.stack.pop();
+            const arg$1 = this.stack.pop();
+            // noinspection EqualityComparisonWithCoercionJS
+            this.stack.push(arg$1 != arg$2);
+        };
+        this.opcodeHandlers[17 /* Opcode.LESS_THAN */] = () => {
+            const arg$2 = this.stack.pop();
+            const arg$1 = this.stack.pop();
+            this.stack.push(arg$1 < arg$2);
+        };
+        this.opcodeHandlers[18 /* Opcode.LESS_THAN_EQUAL */] = () => {
+            const arg$2 = this.stack.pop();
+            const arg$1 = this.stack.pop();
+            this.stack.push(arg$1 <= arg$2);
+        };
+        this.opcodeHandlers[19 /* Opcode.STRICT_EQUAL */] = () => {
+            const arg$2 = this.stack.pop();
+            const arg$1 = this.stack.pop();
+            this.stack.push(arg$1 === arg$2);
+        };
+        this.opcodeHandlers[20 /* Opcode.STRICT_NOT_EQUAL */] = () => {
+            const arg$2 = this.stack.pop();
+            const arg$1 = this.stack.pop();
+            this.stack.push(arg$1 !== arg$2);
+        };
+        this.opcodeHandlers[21 /* Opcode.GREATER_THAN */] = () => {
+            const arg$2 = this.stack.pop();
+            const arg$1 = this.stack.pop();
+            this.stack.push(arg$1 > arg$2);
+        };
+        this.opcodeHandlers[22 /* Opcode.GREATER_THAN_EQUAL */] = () => {
+            const arg$2 = this.stack.pop();
+            const arg$1 = this.stack.pop();
+            this.stack.push(arg$1 >= arg$2);
+        };
+        this.opcodeHandlers[23 /* Opcode.JMP_IF_ELSE */] = () => {
+            const label$2 = this.stack.pop();
+            const label$1 = this.stack.pop();
+            const expression = this.stack.pop();
+            let location;
+            if (expression) {
+                location = this.lookUpTable[label$1];
+            }
+            else if (label$2 !== undefined) {
+                location = this.lookUpTable[label$2];
+            }
+            else {
+                return;
+            }
+            if (location === undefined)
+                throw 'ILLEGAL_JMP';
+            this.jmpToBlock(location);
+        };
+        this.opcodeHandlers[24 /* Opcode.AND */] = () => {
+            const arg$2 = this.stack.pop();
+            const arg$1 = this.stack.pop();
+            this.stack.push(arg$1 && arg$2);
+        };
+        this.opcodeHandlers[25 /* Opcode.OR */] = () => {
+            throw 'UNFINISHED';
+        };
+        this.opcodeHandlers[26 /* Opcode.NOT */] = () => {
+            const expression = this.stack.pop();
+            this.stack.push(!expression);
+        };
+        this.opcodeHandlers[27 /* Opcode.BITWISE_AND */] = () => {
+            throw 'UNFINISHED';
+        };
+        this.opcodeHandlers[28 /* Opcode.BITWISE_OR */] = () => {
+            throw 'UNFINISHED';
+        };
+        this.opcodeHandlers[29 /* Opcode.BITWISE_XOR */] = () => {
+            throw 'UNFINISHED';
+        };
+        this.opcodeHandlers[30 /* Opcode.BITWISE_LEFT_SHIFT */] = () => {
+            throw 'UNFINISHED';
+        };
+        this.opcodeHandlers[31 /* Opcode.BITWISE_RIGHT_SHIFT */] = () => {
+            throw 'UNFINISHED';
+        };
+        this.opcodeHandlers[32 /* Opcode.BITWISE_UNSIGNED_RIGHT_SHIFT */] = () => {
+            throw 'UNFINISHED';
+        };
+        this.opcodeHandlers[33 /* Opcode.PUSH */] = () => {
+            this.stack.push(this.getValue());
+        };
+        this.opcodeHandlers[34 /* Opcode.POP */] = () => {
+            const dst = this.getValue();
+            this.localVariables[dst] = this.stack.pop();
+        };
+        this.opcodeHandlers[35 /* Opcode.INIT_CONSTRUCTOR */] = () => {
+            const val = this.stack.pop();
+            const c = this.stack.pop();
+            this.stack.push(new c(val));
+        };
+        this.opcodeHandlers[36 /* Opcode.INIT_ARRAY */] = () => {
+            const v = this.stack.pop();
+            this.stack.push([v]);
+        };
+        this.opcodeHandlers[37 /* Opcode.EXIT */] = () => {
+            this.exitToPreviousContext[0]();
+            this.exitToPreviousContext.shift();
+        };
+        this.opcodeHandlers[38 /* Opcode.VOID */] = () => {
+            throw 'UNFINISHED';
+        };
+        this.opcodeHandlers[39 /* Opcode.THROW */] = () => {
+            throw 'UNFINISHED';
+        };
+        this.opcodeHandlers[40 /* Opcode.DELETE */] = () => {
+            throw 'UNFINISHED';
+        };
+        this.opcodeHandlers[41 /* Opcode.APPLY */] = () => {
+            const args = this.stack.pop();
+            const obj = this.stack.pop();
+            const fn = this.stack.pop();
+            this.stack.push(fn.apply(obj, args));
+        };
+        this.opcodeHandlers[42 /* Opcode.CALL_MEMBER_EXPRESSION */] = () => {
+            const args = this.stack.pop();
+            const property = this.stack.pop();
+            const obj = this.stack.pop();
+            this.stack.push(obj[property].call(this, ...args));
+        };
     }
     start() {
         while (this.programCounter < this.bytecode.length) {
@@ -195,15 +279,15 @@ export default class VM {
             const count = this.programCounter++;
             // console.log(count)
             const opcode = this.bytecode[count];
-            // console.log(`EXECUTING: ${opcode}`)
-            const handler = this.getInstructionHandler(opcode);
+            console.warn(`EXECUTING: ${opcode}`);
+            const handler = this.opcodeHandlers[opcode];
             if (handler === undefined) {
-                // console.log(vm.decodedBytecode.slice(count-45, count+1))
+                // console.log(this.decodedBytecode.slice(count-45, count+1))
                 // console.log(opcode, count)
                 throw 'UNKNOWN_OPCODE';
             }
             // console.log(this.programCounter)
-            handler(this);
+            handler();
         }
     }
 }

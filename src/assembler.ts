@@ -64,7 +64,7 @@ export default class BytecodeCompiler {
             const opcode = instruction.opcode
             if (opcode === undefined) throw 'UNHANDLED_OPCODE'
 
-            if (opcode === Opcode.JMP_IF) {
+            if (opcode === Opcode.JMP_IF_ELSE) {
                 // need to implement a jmp look up table
                 // console.log("JMP_IF", instruction.args[0])
 
@@ -72,12 +72,14 @@ export default class BytecodeCompiler {
                 // console.log(bytes.length)
                 // we need to put a placeholder of 9 bytes beforehand, so we can replace it later onwards when we add in the jmp locations
 
-                bytes.push(Opcode.PUSH)
-                bytes.push(...this.compileInstructionArgument({
-                    type: Header.LOAD_STRING,
-                    value: instruction.args[0].value
-                    // TODO 已修改，原来是用label作为key完成xor
-                }))
+                for (let i = 0; i < 2; i++) {
+                    bytes.push(Opcode.PUSH)
+                    console.log(instruction.args[i])
+                    bytes.push(...this.compileInstructionArgument({
+                        type: instruction.args[i].type,
+                        value: instruction.args[i].value
+                    }))
+                }
                 bytes.push(opcode)
 
             } else {

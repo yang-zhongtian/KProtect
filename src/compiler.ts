@@ -93,6 +93,13 @@ export default class Compiler {
         }
     }
 
+    private createUndefinedArgument(): InstructionArgument {
+        return {
+            type: Header.LOAD_UNDEFINED,
+            value: null
+        }
+    }
+
     private createDependencyArgument(pointer: number): InstructionArgument {
         return {
             type: Header.FETCH_DEPENDENCY,
@@ -255,10 +262,10 @@ export default class Compiler {
         })
     }
 
-    private appendJmpIfInstruction(arg: InstructionArgument) {
+    private appendJmpIfElseInstruction(arg$1: InstructionArgument, arg$2: InstructionArgument) {
         this.pushInstruction({
-            opcode: Opcode.JMP_IF,
-            args: [arg]
+            opcode: Opcode.JMP_IF_ELSE,
+            args: [arg$1, arg$2]
         })
     }
 
@@ -472,12 +479,17 @@ export default class Compiler {
             instructions: [],
             inheritsContext: true,
         }
-        let label = `if_${node.start}:${node.end}`
+        let if_label = `if_${node.start}:${node.end}`
+        let else_label = `else_${node.start}:${node.end}`
         // push the expression onto the stack
         this.appendPushInstruction(this.translateExpression(node.test))
 
-        this.appendJmpIfInstruction(this.createStringArgument(label))
-        this.il[label] = block
+        if (!node.alternate) {
+            this.appendJmpIfElseInstruction(this.createStringArgument(if_label), this.createUndefinedArgument())
+        } else {
+            this.appendJmpIfElseInstruction(this.createStringArgument(if_label), this.createStringArgument(else_label))
+        }
+        this.il[if_label] = block
 
         this.blocks.unshift(block)
         if (node.consequent.type === 'BlockStatement') {
@@ -493,16 +505,9 @@ export default class Compiler {
             instructions: [],
             inheritsContext: true,
         }
-        label = `else_${node.start}:${node.end}`
-        // push the expression onto the stack
-        this.appendPushInstruction(this.translateExpression(node.test))
-        this.appendNotInstruction()
-
-        this.appendJmpIfInstruction(this.createStringArgument(label))
-        this.il[label] = block
+        this.il[else_label] = block
 
         this.blocks.unshift(block)
-
         if (node.alternate.type === 'BlockStatement') {
             this.buildIL(node.alternate.body)
         } else {
@@ -554,6 +559,11 @@ export default class Compiler {
                     switch (statement.expression.type) {
                         case 'CallExpression':
                             this.pushCallExpressionOntoStack(statement.expression)
+                            break
+                        case 'AssignmentExpression':
+                            const declarator = babel.types.variableDeclarator(statement.expression.left, statement.expression.right)
+                            const declaration = babel.types.variableDeclaration('var', [declarator])
+                            this.translateVariableDeclaration(declaration)
                             break
                         default:
                             console.error(statement.expression.type)

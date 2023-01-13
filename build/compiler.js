@@ -1,3 +1,4 @@
+import * as babel from '@babel/core';
 import { parse } from '@babel/parser';
 import { Dependency } from './constant.js';
 export default class Compiler {
@@ -51,6 +52,12 @@ export default class Compiler {
     createArrayArgument() {
         return {
             type: 6 /* Header.LOAD_ARRAY */,
+            value: null
+        };
+    }
+    createUndefinedArgument() {
+        return {
+            type: 5 /* Header.LOAD_UNDEFINED */,
             value: null
         };
     }
@@ -135,13 +142,13 @@ export default class Compiler {
     }
     appendNotInstruction() {
         this.pushInstruction({
-            opcode: 23 /* Opcode.NOT */,
+            opcode: 26 /* Opcode.NOT */,
             args: []
         });
     }
     appendTypeofInstruction() {
         this.pushInstruction({
-            opcode: 12 /* Opcode.TYPEOF */,
+            opcode: 13 /* Opcode.TYPEOF */,
             args: []
         });
     }
@@ -159,44 +166,44 @@ export default class Compiler {
     }
     appendCallMemberExpression() {
         this.pushInstruction({
-            opcode: 37 /* Opcode.CALL_MEMBER_EXPRESSION */,
+            opcode: 42 /* Opcode.CALL_MEMBER_EXPRESSION */,
             args: []
         });
     }
     appendPushInstruction(arg) {
         this.pushInstruction({
-            opcode: 24 /* Opcode.PUSH */,
+            opcode: 33 /* Opcode.PUSH */,
             args: [arg]
         });
     }
     appendPopInstruction(arg) {
         this.pushInstruction({
-            opcode: 25 /* Opcode.POP */,
+            opcode: 34 /* Opcode.POP */,
             args: [arg]
         });
     }
     appendCallInstruction() {
         this.pushInstruction({
-            opcode: 13 /* Opcode.CALL */,
+            opcode: 14 /* Opcode.CALL */,
             args: []
         });
     }
     appendApplyInstruction() {
         this.pushInstruction({
-            opcode: 36 /* Opcode.APPLY */,
+            opcode: 41 /* Opcode.APPLY */,
             args: []
         });
     }
     appendInitArrayInstruction() {
         this.pushInstruction({
-            opcode: 27 /* Opcode.INIT_ARRAY */,
+            opcode: 36 /* Opcode.INIT_ARRAY */,
             args: []
         });
     }
-    appendJmpIfInstruction(arg) {
+    appendJmpIfElseInstruction(arg$1, arg$2) {
         this.pushInstruction({
-            opcode: 22 /* Opcode.JMP_IF */,
-            args: [arg]
+            opcode: 23 /* Opcode.JMP_IF_ELSE */,
+            args: [arg$1, arg$2]
         });
     }
     declareArrVariable() {
@@ -227,25 +234,25 @@ export default class Compiler {
         switch (node.operator) {
             case '==':
                 this.pushInstruction({
-                    opcode: 14 /* Opcode.EQUAL */,
+                    opcode: 15 /* Opcode.EQUAL */,
                     args: []
                 });
                 break;
             case '===':
                 this.pushInstruction({
-                    opcode: 18 /* Opcode.STRICT_EQUAL */,
+                    opcode: 19 /* Opcode.STRICT_EQUAL */,
                     args: []
                 });
                 break;
             case '!=':
                 this.pushInstruction({
-                    opcode: 15 /* Opcode.NOT_EQUAL */,
+                    opcode: 16 /* Opcode.NOT_EQUAL */,
                     args: []
                 });
                 break;
             case '!==':
                 this.pushInstruction({
-                    opcode: 19 /* Opcode.STRICT_NOT_EQUAL */,
+                    opcode: 20 /* Opcode.STRICT_NOT_EQUAL */,
                     args: []
                 });
                 break;
@@ -281,25 +288,25 @@ export default class Compiler {
                 break;
             case '<':
                 this.pushInstruction({
-                    opcode: 16 /* Opcode.LESS_THAN */,
+                    opcode: 17 /* Opcode.LESS_THAN */,
                     args: []
                 });
                 break;
             case '<=':
                 this.pushInstruction({
-                    opcode: 17 /* Opcode.LESS_THAN_EQUAL */,
+                    opcode: 18 /* Opcode.LESS_THAN_EQUAL */,
                     args: []
                 });
                 break;
             case '>':
                 this.pushInstruction({
-                    opcode: 20 /* Opcode.GREATER_THAN */,
+                    opcode: 21 /* Opcode.GREATER_THAN */,
                     args: []
                 });
                 break;
             case '>=':
                 this.pushInstruction({
-                    opcode: 21 /* Opcode.GREATER_THAN_EQUAL */,
+                    opcode: 22 /* Opcode.GREATER_THAN_EQUAL */,
                     args: []
                 });
                 break;
@@ -388,11 +395,17 @@ export default class Compiler {
             instructions: [],
             inheritsContext: true,
         };
-        let label = `if_${node.start}:${node.end}`;
+        let if_label = `if_${node.start}:${node.end}`;
+        let else_label = `else_${node.start}:${node.end}`;
         // push the expression onto the stack
         this.appendPushInstruction(this.translateExpression(node.test));
-        this.appendJmpIfInstruction(this.createStringArgument(label));
-        this.il[label] = block;
+        if (!node.alternate) {
+            this.appendJmpIfElseInstruction(this.createStringArgument(if_label), this.createUndefinedArgument());
+        }
+        else {
+            this.appendJmpIfElseInstruction(this.createStringArgument(if_label), this.createStringArgument(else_label));
+        }
+        this.il[if_label] = block;
         this.blocks.unshift(block);
         if (node.consequent.type === 'BlockStatement') {
             this.buildIL(node.consequent.body);
@@ -407,12 +420,7 @@ export default class Compiler {
             instructions: [],
             inheritsContext: true,
         };
-        label = `else_${node.start}:${node.end}`;
-        // push the expression onto the stack
-        this.appendPushInstruction(this.translateExpression(node.test));
-        this.appendNotInstruction();
-        this.appendJmpIfInstruction(this.createStringArgument(label));
-        this.il[label] = block;
+        this.il[else_label] = block;
         this.blocks.unshift(block);
         if (node.alternate.type === 'BlockStatement') {
             this.buildIL(node.alternate.body);
@@ -458,6 +466,11 @@ export default class Compiler {
                     switch (statement.expression.type) {
                         case 'CallExpression':
                             this.pushCallExpressionOntoStack(statement.expression);
+                            break;
+                        case 'AssignmentExpression':
+                            const declarator = babel.types.variableDeclarator(statement.expression.left, statement.expression.right);
+                            const declaration = babel.types.variableDeclaration('var', [declarator]);
+                            this.translateVariableDeclaration(declaration);
                             break;
                         default:
                             console.error(statement.expression.type);
