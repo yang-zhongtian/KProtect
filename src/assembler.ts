@@ -74,11 +74,7 @@ export default class BytecodeCompiler {
 
                 for (let i = 0; i < 2; i++) {
                     bytes.push(Opcode.PUSH)
-                    console.log(instruction.args[i])
-                    bytes.push(...this.compileInstructionArgument({
-                        type: instruction.args[i].type,
-                        value: instruction.args[i].value
-                    }))
+                    bytes.push(...this.compileInstructionArgument(instruction.args[i]))
                 }
                 bytes.push(opcode)
 
