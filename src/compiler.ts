@@ -1,6 +1,6 @@
 import * as babel from '@babel/core'
 import {parse} from '@babel/parser'
-import {Header, Opcode, Dependency} from './constant.js'
+import {Header, Opcode} from './constant.js'
 
 export interface Context {
     variables: Map<string, number>
@@ -30,6 +30,7 @@ export default class Compiler {
     ast: babel.types.File
     contexts: Context[]
     dependencies: string[]
+    dependenciesUnderWindow: string[]
     blocks: Block[]
     il: IntermediateLanguage
 
@@ -39,7 +40,14 @@ export default class Compiler {
             variables: new Map<string, number>(),
             counter: 0
         }]
-        this.dependencies = Dependency.map(this.getObjectName)
+        this.dependencies = ['window', 'console']
+        this.dependenciesUnderWindow = ['Array', 'ArrayBuffer', 'Atomics', 'Boolean', 'DataView', 'Date', 'Error',
+            'EvalError', 'Float32Array', 'Float64Array', 'Function', 'Infinity', 'Int16Array', 'Int32Array',
+            'Int8Array', 'JSON', 'Map', 'Math', 'NaN', 'Number', 'Object', 'Promise', 'Proxy', 'RangeError',
+            'ReferenceError', 'Reflect', 'RegExp', 'Set', 'String', 'Symbol', 'SyntaxError', 'TypeError', 'URIError',
+            'Uint16Array', 'Uint32Array', 'Uint8Array', 'Uint8ClampedArray', 'WeakMap', 'WeakSet', 'alert', 'Object',
+            'decodeURI', 'decodeURIComponent', 'encodeURI', 'encodeURIComponent', 'escape', 'eval', 'isFinite',
+            'isNaN', 'parseFloat', 'parseInt', 'undefined', 'unescape']
         const block: Block = {
             instructions: [],
             inheritsContext: true,
@@ -58,17 +66,6 @@ export default class Compiler {
         return ast
     }
 
-    private getObjectName(object: any) {
-        if (typeof object === 'function') {
-            return object.name ?? object.constructor.name
-        } else if (typeof object === 'object') {
-            return object.toString().match(/^\[object\s(?<s>.*)]$/)?.groups?.s
-        } else if (typeof object === 'number') {
-            return object.toString()
-        }
-        return String(object)
-    }
-
     private isVariableInitialized(name: string): boolean {
         return this.contexts[0].variables.has(name)
     }
@@ -81,8 +78,16 @@ export default class Compiler {
         return this.dependencies.includes(name)
     }
 
+    private isADependencyUnderWindow(name: string) {
+        return this.dependenciesUnderWindow.includes(name)
+    }
+
     private getDependencyPointer(name: string) {
         return this.dependencies.indexOf(name)
+    }
+
+    private getDependencyExpressionUnderWindow(node: babel.types.Identifier) {
+        return babel.types.memberExpression(babel.types.identifier('window'), node)
     }
 
     private pushInstruction(instruction: Instruction) {
@@ -187,6 +192,9 @@ export default class Compiler {
             case 'Identifier':
                 if (this.isADependency(node.name)) {
                     return this.createDependencyArgument(this.getDependencyPointer(node.name))
+                }
+                if (this.isADependencyUnderWindow(node.name)) {
+                    return this.translateExpression(this.getDependencyExpressionUnderWindow(node))
                 }
 
                 const reg = this.contexts[0].variables.get(node.name)
@@ -296,9 +304,9 @@ export default class Compiler {
         })
     }
 
-    private appendJmpInstruction(arg: InstructionArgument) {
+    private appendJmpInstruction(arg: InstructionArgument, traceback = true) {
         this.pushInstruction({
-            opcode: Opcode.JMP,
+            opcode: traceback ? Opcode.JMP : Opcode.JMP_NO_TRACEBACK,
             args: [arg],
         })
     }
@@ -447,8 +455,7 @@ export default class Compiler {
 
                 // 依赖命中
                 if (this.isADependency(node.object.name)) {
-                    const pointer = this.dependencies.indexOf(node.object.name)
-                    this.appendPushInstruction(this.createDependencyArgument(pointer))
+                    this.appendPushInstruction(this.createDependencyArgument(this.getDependencyPointer(node.object.name)))
                 } else {
                     console.error(node.object.name)
                     throw 'BASE_NOT_DEPENDENCY'
@@ -521,6 +528,8 @@ export default class Compiler {
                 console.error(node.callee.type)
                 throw 'UNHANDLED_CALL_EXPRESSION_TYPE'
         }
+        // remove reference? not sure what is occupying the stack
+        this.appendPopInstruction(this.createUndefinedArgument())
     }
 
     private translateWhileLoop(node: babel.types.WhileStatement) {
@@ -544,7 +553,7 @@ export default class Compiler {
             this.buildIL([node.body])
         }
 
-        this.appendJmpInstruction(this.createStringArgument(label))
+        this.appendJmpInstruction(this.createStringArgument(label), false)
         this.blocks.shift()
     }
 
@@ -651,9 +660,16 @@ export default class Compiler {
                     switch (statement.expression.type) {
                         case 'CallExpression':
                             this.pushCallExpressionOntoStack(statement.expression)
+                            // Pop the return data of the calling from stack since it is not received.
+                            this.appendPopInstruction(this.createUndefinedArgument())
                             break
                         case 'AssignmentExpression':
                             this.translateVariableAssignment(statement.expression.left, statement.expression.right)
+                            break
+                        case 'UpdateExpression':
+                            this.translateExpression(statement.expression)
+                            // Pop the update result
+                            this.appendPopInstruction(this.createUndefinedArgument())
                             break
                         default:
                             console.error(statement.expression.type)

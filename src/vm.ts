@@ -1,4 +1,4 @@
-import {Dependency, Header, Opcode} from './constant'
+import {Header, Opcode} from './constant'
 import {inflateRaw} from 'pako'
 
 export default class VM {
@@ -16,7 +16,7 @@ export default class VM {
         this.bytecode = this.decodeBytecode(bytecode)
 
         this.strings = strings
-        this.dependencies = Dependency.map(value => value !== 'window' ? value : globalThis)
+        this.dependencies = [window, console]
         this.opcodeHandlers = []
         this.stack = []
         this.localVariables = []
@@ -95,11 +95,12 @@ export default class VM {
         }
     }
 
-    private jmpToBlock(location: number, traceback: number) {
-        this.exitToPreviousContext.push(() => {
-            this.programCounter = traceback
-        })
-        // console.log('JMP', label)
+    private jmpToBlock(location: number, traceback: number | undefined) {
+        if (traceback !== undefined) {
+            this.exitToPreviousContext.push(() => {
+                this.programCounter = traceback
+            })
+        }
         this.programCounter = location
     }
 
@@ -175,7 +176,7 @@ export default class VM {
             const argArr = this.stack.pop()
             const fn = this.stack.pop()
 
-            this.stack.push(fn.call(this, ...argArr))
+            this.stack.push(fn(...argArr))
         }
         this.opcodeHandlers[Opcode.EQUAL] = () => {
             const arg$2 = this.stack.pop()
@@ -250,6 +251,13 @@ export default class VM {
             if (location === undefined) throw 'ILLEGAL_JMP'
             this.jmpToBlock(location, this.programCounter)
         }
+        this.opcodeHandlers[Opcode.JMP_NO_TRACEBACK] = () => {
+            const label = this.stack.pop()
+
+            const location = this.lookUpTable[label]
+            if (location === undefined) throw 'ILLEGAL_JMP'
+            this.jmpToBlock(location, undefined)
+        }
         this.opcodeHandlers[Opcode.AND] = () => {
             const arg$2 = this.stack.pop()
             const arg$1 = this.stack.pop()
@@ -287,8 +295,11 @@ export default class VM {
         }
         this.opcodeHandlers[Opcode.POP] = () => {
             const dst = this.getValue()
+            const data = this.stack.pop()
 
-            this.localVariables[dst] = this.stack.pop()
+            if (dst !== undefined) {
+                this.localVariables[dst] = data
+            }
         }
         this.opcodeHandlers[Opcode.INIT_CONSTRUCTOR] = () => {
             const val = this.stack.pop()
@@ -335,18 +346,18 @@ export default class VM {
             const property = this.stack.pop()
             const obj = this.stack.pop()
 
-            this.stack.push(obj[property].call(this, ...args))
+            this.stack.push(obj[property](...args))
         }
 
     }
 
     start() {
         while (this.programCounter < this.bytecode.length) {
-            // console.log(this.exitToPreviousContext, this.stack)
             const count = this.programCounter++
             // console.log(count)
             const opcode = this.bytecode[count]
             // console.warn(`EXECUTING: ${opcode}`)
+            // console.log(JSON.stringify(this.stack))
             const handler = this.opcodeHandlers[opcode]
 
             if (handler === undefined) {

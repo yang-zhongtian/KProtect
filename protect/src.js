@@ -1,7 +1,13 @@
 // noinspection All
 
-let a = 1;
-while (a <= 5) {
-    console.log(a++)
+let a = 0
+while (a < 10) {
+    let b = 0
+    let s = ""
+    while (b <= a) {
+        s = s + "*  "
+        b++
+    }
+    console.log(s)
+    a++
 }
-console.log('finish')

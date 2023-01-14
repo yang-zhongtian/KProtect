@@ -2,6 +2,8 @@ import {Block, InstructionArgument, IntermediateLanguage} from './compiler'
 import {Header, Opcode} from './constant'
 import {deflateRaw} from 'pako'
 
+const OPCODE_WITH_DATA_FROM_STACK = [Opcode.JMP, Opcode.JMP_IF_ELSE, Opcode.JMP_NO_TRACEBACK]
+
 export interface VirtualMachineArguments {
     bytecode: number[]
     strings: string[]
@@ -64,7 +66,7 @@ export default class BytecodeCompiler {
             const opcode = instruction.opcode
             if (opcode === undefined) throw 'UNHANDLED_OPCODE'
 
-            if (opcode === Opcode.JMP || opcode === Opcode.JMP_IF_ELSE) {
+            if (OPCODE_WITH_DATA_FROM_STACK.includes(opcode)) {
                 instruction.args.forEach(command => {
                     bytes.push(Opcode.PUSH)
                     bytes.push(...this.compileInstructionArgument(command))
