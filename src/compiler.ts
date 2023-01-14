@@ -34,7 +34,7 @@ export default class Compiler {
     il: IntermediateLanguage
 
     constructor(source: string) {
-        this.ast = parse(source)
+        this.ast = this.parse(source)
         this.contexts = [{
             variables: new Map<string, number>(),
             counter: 0
@@ -46,6 +46,16 @@ export default class Compiler {
         }
         this.blocks = [block]
         this.il = {'main': block}
+    }
+
+    private parse(source: string) {
+        const ast = babel.transformFromAstSync(parse(source), source, {
+            ast: true,
+            code: false,
+            presets: ['@babel/preset-env'],
+        })?.ast
+        if (!ast) throw 'TRANSFER_TO_ES5_FAILED'
+        return ast
     }
 
     private getObjectName(object: any) {
@@ -180,14 +190,38 @@ export default class Compiler {
                 }
 
                 const reg = this.contexts[0].variables.get(node.name)
-                if (reg === undefined) throw 'UNKNOWN_SOURCE_VARIABLE'
+                if (reg === undefined) {
+                    console.error(node.name)
+                    throw 'UNKNOWN_SOURCE_VARIABLE'
+                }
                 return this.createVariableArgument(reg)
 
             case 'NumericLiteral':
                 return this.createNumberArgument(node.value)
 
+            case 'UpdateExpression':
+                target = node.argument
+                if(target.type !== 'Identifier') throw 'INVALID_UPDATE'
+                const op = node.operator === '++' ? '+' : '-'
+                if (node.prefix) {
+                    let expression = babel.types.binaryExpression(op, target, babel.types.numericLiteral(1))
+                    this.translateVariableAssignment(target, expression)
+                    const reg = this.contexts[0].variables.get(target.name)
+                    if (reg === undefined) {
+                        console.error(target.name)
+                        throw 'UNKNOWN_SOURCE_VARIABLE'
+                    }
+                    return this.createVariableArgument(reg)
+                } else {
+                    this.appendPushInstruction(this.translateExpression(target))
+                    let expression = babel.types.binaryExpression(op, target, babel.types.numericLiteral(1))
+                    this.translateVariableAssignment(target, expression)
+                    target = this.contexts[0].counter++
+                    this.appendPopInstruction(this.createNumberArgument(target))
+                    return this.createVariableArgument(target)
+                }
             default:
-                console.error(node.type)
+                console.error(node)
                 throw 'UNHANDLED_VALUE'
         }
     }
@@ -266,6 +300,13 @@ export default class Compiler {
         this.pushInstruction({
             opcode: Opcode.JMP_IF_ELSE,
             args: [arg$1, arg$2]
+        })
+    }
+
+    private appendJmpWhileInstruction(arg: InstructionArgument) {
+        this.pushInstruction({
+            opcode: Opcode.JMP_WHILE,
+            args: [arg]
         })
     }
 
@@ -469,9 +510,24 @@ export default class Compiler {
     }
 
     private translateWhileLoop(node: babel.types.WhileStatement) {
-        console.error(node)
-        throw 'WHILE_LOOP_UNSUPPORTED'
-        // TODO 转译while
+        let block: Block = {
+            instructions: [],
+            inheritsContext: true,
+        }
+        const label = `while_${node.start}:${node.end}`
+
+        this.appendPushInstruction(this.translateExpression(node.test))
+
+        this.appendJmpWhileInstruction(this.createStringArgument(label))
+        this.il[label] = block
+
+        this.blocks.unshift(block)
+        if (node.body.type === 'BlockStatement') {
+            this.buildIL(node.body.body)
+        } else {
+            this.buildIL([node.body])
+        }
+        this.blocks.shift()
     }
 
     private translateIfStatement(node: babel.types.IfStatement) {
@@ -479,8 +535,8 @@ export default class Compiler {
             instructions: [],
             inheritsContext: true,
         }
-        let if_label = `if_${node.start}:${node.end}`
-        let else_label = `else_${node.start}:${node.end}`
+        const if_label = `if_${node.start}:${node.end}`
+        const else_label = `else_${node.start}:${node.end}`
         // push the expression onto the stack
         this.appendPushInstruction(this.translateExpression(node.test))
 
@@ -522,22 +578,38 @@ export default class Compiler {
                 throw 'UNHANDLED_VARIABLE_DECL_ID'
             }
 
-            let target = this.contexts[0].counter++
             if (this.isVariableInitialized(declaration.id.name)) {
-                const reg = this.contexts[0].variables.get(declaration.id.name)
-                if (reg === undefined) {
-                    throw 'UNHANDLED'
-                }
-                target = reg
+                this.translateVariableAssignment(declaration.id, declaration.init)
+            } else {
+                const target = this.contexts[0].counter++
+                this.initializeVariable(declaration.id.name, target)
+
+                this.appendStoreInstruction([
+                    this.createNumberArgument(target),
+                    this.translateExpression(declaration.init),
+                ])
             }
-
-            this.appendStoreInstruction([
-                this.createNumberArgument(target),
-                this.translateExpression(declaration.init),
-            ])
-            this.initializeVariable(declaration.id.name, target)
-
         })
+    }
+
+    private translateVariableAssignment(node: babel.types.LVal, value: babel.types.Expression | null | undefined) {
+        if (node.type !== 'Identifier') {
+            throw 'UNHANDLED_VARIABLE_DECL_ID'
+        }
+
+        if (!this.isVariableInitialized(node.name)) {
+            throw 'VARIABLE_NOT_DEFINED'
+        }
+
+        const reg = this.contexts[0].variables.get(node.name)
+        if (reg === undefined) {
+            throw 'UNHANDLED'
+        }
+
+        this.appendStoreInstruction([
+            this.createNumberArgument(reg),
+            this.translateExpression(value),
+        ])
     }
 
     private buildIL(statements: babel.types.Statement[]) {
@@ -561,9 +633,7 @@ export default class Compiler {
                             this.pushCallExpressionOntoStack(statement.expression)
                             break
                         case 'AssignmentExpression':
-                            const declarator = babel.types.variableDeclarator(statement.expression.left, statement.expression.right)
-                            const declaration = babel.types.variableDeclaration('var', [declarator])
-                            this.translateVariableDeclaration(declaration)
+                            this.translateVariableAssignment(statement.expression.left, statement.expression.right)
                             break
                         default:
                             console.error(statement.expression.type)
