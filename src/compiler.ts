@@ -19,7 +19,7 @@ export interface Instruction {
 
 export interface Block {
     instructions: Instruction[]
-    inheritsContext: boolean
+    inheritsContext: boolean,
 }
 
 export interface IntermediateLanguage {
@@ -201,7 +201,7 @@ export default class Compiler {
 
             case 'UpdateExpression':
                 target = node.argument
-                if(target.type !== 'Identifier') throw 'INVALID_UPDATE'
+                if (target.type !== 'Identifier') throw 'INVALID_UPDATE'
                 const op = node.operator === '++' ? '+' : '-'
                 if (node.prefix) {
                     let expression = babel.types.binaryExpression(op, target, babel.types.numericLiteral(1))
@@ -296,17 +296,31 @@ export default class Compiler {
         })
     }
 
-    private appendJmpIfElseInstruction(arg$1: InstructionArgument, arg$2: InstructionArgument) {
+    private appendJmpInstruction(arg: InstructionArgument) {
         this.pushInstruction({
-            opcode: Opcode.JMP_IF_ELSE,
-            args: [arg$1, arg$2]
+            opcode: Opcode.JMP,
+            args: [arg],
         })
     }
 
-    private appendJmpWhileInstruction(arg: InstructionArgument) {
+    private appendJmpIfElseInstruction(arg$1: InstructionArgument, arg$2: InstructionArgument) {
         this.pushInstruction({
-            opcode: Opcode.JMP_WHILE,
-            args: [arg]
+            opcode: Opcode.JMP_IF_ELSE,
+            args: [arg$1, arg$2],
+        })
+    }
+
+    private appendExitInstruction() {
+        this.pushInstruction({
+            opcode: Opcode.EXIT,
+            args: []
+        })
+    }
+
+    private appendExitIfInstruction() {
+        this.pushInstruction({
+            opcode: Opcode.EXIT_IF,
+            args: []
         })
     }
 
@@ -516,17 +530,21 @@ export default class Compiler {
         }
         const label = `while_${node.start}:${node.end}`
 
-        this.appendPushInstruction(this.translateExpression(node.test))
-
-        this.appendJmpWhileInstruction(this.createStringArgument(label))
+        this.appendJmpInstruction(this.createStringArgument(label))
         this.il[label] = block
 
         this.blocks.unshift(block)
+        this.appendPushInstruction(this.translateExpression(node.test))
+        this.appendNotInstruction()
+        this.appendExitIfInstruction()
+
         if (node.body.type === 'BlockStatement') {
             this.buildIL(node.body.body)
         } else {
             this.buildIL([node.body])
         }
+
+        this.appendJmpInstruction(this.createStringArgument(label))
         this.blocks.shift()
     }
 
@@ -553,6 +571,7 @@ export default class Compiler {
         } else {
             this.buildIL([node.consequent])
         }
+        this.appendExitInstruction()
         this.blocks.shift()
 
         if (!node.alternate) return
@@ -569,6 +588,7 @@ export default class Compiler {
         } else {
             this.buildIL([node.alternate])
         }
+        this.appendExitInstruction()
         this.blocks.shift()
     }
 

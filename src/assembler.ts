@@ -64,20 +64,12 @@ export default class BytecodeCompiler {
             const opcode = instruction.opcode
             if (opcode === undefined) throw 'UNHANDLED_OPCODE'
 
-            if (opcode === Opcode.JMP_IF_ELSE) {
-                // need to implement a jmp look up table
-                // console.log("JMP_IF", instruction.args[0])
-
-
-                // console.log(bytes.length)
-                // we need to put a placeholder of 9 bytes beforehand, so we can replace it later onwards when we add in the jmp locations
-
-                for (let i = 0; i < 2; i++) {
+            if (opcode === Opcode.JMP || opcode === Opcode.JMP_IF_ELSE) {
+                instruction.args.forEach(command => {
                     bytes.push(Opcode.PUSH)
-                    bytes.push(...this.compileInstructionArgument(instruction.args[i]))
-                }
+                    bytes.push(...this.compileInstructionArgument(command))
+                })
                 bytes.push(opcode)
-
             } else {
                 bytes.push(opcode)
                 instruction.args.forEach(command => {
@@ -96,8 +88,6 @@ export default class BytecodeCompiler {
             this.lookUpTable[label] = bytes.length
 
             this.compileBlock(block, bytes)
-
-            bytes.push(Opcode.EXIT)
         }
 
         this.bytecode = Uint8Array.from(bytes)

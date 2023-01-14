@@ -95,11 +95,9 @@ export default class VM {
         }
     }
 
-    private jmpToBlock(location: number) {
-        const pc = this.programCounter
-
+    private jmpToBlock(location: number, traceback: number) {
         this.exitToPreviousContext.push(() => {
-            this.programCounter = pc
+            this.programCounter = traceback
         })
         // console.log('JMP', label)
         this.programCounter = location
@@ -229,6 +227,13 @@ export default class VM {
 
             this.stack.push(arg$1 >= arg$2)
         }
+        this.opcodeHandlers[Opcode.JMP] = () => {
+            const label = this.stack.pop()
+
+            const location = this.lookUpTable[label]
+            if (location === undefined) throw 'ILLEGAL_JMP'
+            this.jmpToBlock(location, this.programCounter)
+        }
         this.opcodeHandlers[Opcode.JMP_IF_ELSE] = () => {
             const label$2 = this.stack.pop()
             const label$1 = this.stack.pop()
@@ -243,7 +248,7 @@ export default class VM {
                 return
             }
             if (location === undefined) throw 'ILLEGAL_JMP'
-            this.jmpToBlock(location)
+            this.jmpToBlock(location, this.programCounter)
         }
         this.opcodeHandlers[Opcode.AND] = () => {
             const arg$2 = this.stack.pop()
@@ -301,6 +306,12 @@ export default class VM {
             if (func === undefined) throw 'EMPTY_TRACEBACK'
             func()
         }
+        this.opcodeHandlers[Opcode.EXIT_IF] = () => {
+            const expression = this.stack.pop()
+            if (expression) {
+                this.opcodeHandlers[Opcode.EXIT]()
+            }
+        }
         this.opcodeHandlers[Opcode.VOID] = () => {
             throw 'UNFINISHED'
         }
@@ -331,11 +342,11 @@ export default class VM {
 
     start() {
         while (this.programCounter < this.bytecode.length) {
-            // console.log(this.exitToPreviousContext)
+            // console.log(this.exitToPreviousContext, this.stack)
             const count = this.programCounter++
             // console.log(count)
             const opcode = this.bytecode[count]
-            console.warn(`EXECUTING: ${opcode}`)
+            // console.warn(`EXECUTING: ${opcode}`)
             const handler = this.opcodeHandlers[opcode]
 
             if (handler === undefined) {
