@@ -32,9 +32,9 @@ class Stack<T> {
 export default class VM {
     private readonly bytecode: Uint8Array
     private readonly strings: string[]
-    private readonly dependencies: any[]
+    private readonly dependencies = [window, console]
     private readonly lookUpTable: { [index: string]: number }
-    private readonly opcodeHandlers: any[]
+    private readonly opcodeHandlers: Function[]
     private readonly stack: Stack<any>
     private readonly tracebackStack: Stack<Function>
     private readonly blockLabelStack: Stack<string>
@@ -45,7 +45,6 @@ export default class VM {
         this.bytecode = this.decodeBytecode(bytecode)
 
         this.strings = strings
-        this.dependencies = [window, console]
         this.opcodeHandlers = []
         this.stack = new Stack()
         this.localVariables = []
