@@ -64,7 +64,8 @@ production environment.
 * stack: runtime data storage
 * programCounter: current opcode index
 * localVariables: variable storage
-* exitToPreviousContext: traceback stack after exiting other blocks
+* tracebackStack: traceback stack after exiting other blocks
+* blockLabelStack: the stack of active block labels
 
 #### Core
 ```text

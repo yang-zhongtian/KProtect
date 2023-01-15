@@ -48,10 +48,7 @@ export default class Compiler {
             'Uint16Array', 'Uint32Array', 'Uint8Array', 'Uint8ClampedArray', 'WeakMap', 'WeakSet', 'alert', 'Object',
             'decodeURI', 'decodeURIComponent', 'encodeURI', 'encodeURIComponent', 'escape', 'eval', 'isFinite',
             'isNaN', 'parseFloat', 'parseInt', 'undefined', 'unescape']
-        const block: Block = {
-            instructions: [],
-            inheritsContext: true,
-        }
+        const block = this.makeNewBlock()
         this.blocks = [block]
         this.il = {'main': block}
     }
@@ -318,6 +315,13 @@ export default class Compiler {
         })
     }
 
+    private appendLoopInstruction() {
+        this.pushInstruction({
+            opcode: Opcode.LOOP,
+            args: [],
+        })
+    }
+
     private appendExitInstruction() {
         this.pushInstruction({
             opcode: Opcode.EXIT,
@@ -532,11 +536,15 @@ export default class Compiler {
         this.appendPopInstruction(this.createUndefinedArgument())
     }
 
-    private translateWhileLoop(node: babel.types.WhileStatement) {
-        let block: Block = {
+    private makeNewBlock(): Block {
+        return {
             instructions: [],
             inheritsContext: true,
         }
+    }
+
+    private translateWhileLoop(node: babel.types.WhileStatement) {
+        let block = this.makeNewBlock()
         const label = `while_${node.start}:${node.end}`
 
         this.appendJmpInstruction(this.createStringArgument(label))
@@ -553,15 +561,12 @@ export default class Compiler {
             this.buildIL([node.body])
         }
 
-        this.appendJmpInstruction(this.createStringArgument(label), false)
+        this.appendLoopInstruction()
         this.blocks.shift()
     }
 
     private translateForLoop(node: babel.types.ForStatement) {
-        let block: Block = {
-            instructions: [],
-            inheritsContext: true,
-        }
+        let block = this.makeNewBlock()
         const label = `for_${node.start}:${node.end}`
 
         if (node.init) {
@@ -588,19 +593,15 @@ export default class Compiler {
         } else {
             this.buildIL([node.body])
         }
-
         if (node.update) {
             this.buildIL([babel.types.expressionStatement(node.update)])
         }
-        this.appendJmpInstruction(this.createStringArgument(label), false)
+        this.appendLoopInstruction()
         this.blocks.shift()
     }
 
     private translateIfStatement(node: babel.types.IfStatement) {
-        let block: Block = {
-            instructions: [],
-            inheritsContext: true,
-        }
+        let block = this.makeNewBlock()
         const if_label = `if_${node.start}:${node.end}`
         const else_label = `else_${node.start}:${node.end}`
         // push the expression onto the stack
@@ -624,10 +625,7 @@ export default class Compiler {
 
         if (!node.alternate) return
 
-        block = {
-            instructions: [],
-            inheritsContext: true,
-        }
+        block = this.makeNewBlock()
         this.il[else_label] = block
 
         this.blocks.unshift(block)
@@ -722,6 +720,10 @@ export default class Compiler {
 
                 case 'BreakStatement':
                     this.appendExitInstruction()
+                    break
+
+                case 'ContinueStatement':
+                    this.appendLoopInstruction()
                     break
 
                 default:

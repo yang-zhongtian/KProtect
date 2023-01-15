@@ -8,8 +8,9 @@ export default class VM {
     private readonly lookUpTable: { [index: string]: number }
     private readonly opcodeHandlers: any[]
     private readonly stack: any[]
+    private readonly tracebackStack: Function[]
+    private readonly blockLabelStack: string[]
     private readonly localVariables: any[]
-    private readonly exitToPreviousContext: Function[]
     private programCounter: number
 
     constructor(bytecode: string, strings: string[], lookUpTable: { [index: string]: number }) {
@@ -22,11 +23,12 @@ export default class VM {
         this.localVariables = []
         this.lookUpTable = lookUpTable
 
-        this.exitToPreviousContext = [() => {
+        this.tracebackStack = [() => {
             // if we call this function from main context then we just exit
             this.programCounter = this.bytecode.length + 1
             // this.programCounter = +inf
         }]
+        this.blockLabelStack = []
         this.programCounter = 0
         this.initOpcodeHandlers()
     }
@@ -95,12 +97,15 @@ export default class VM {
         }
     }
 
-    private jmpToBlock(location: number, traceback: number | undefined) {
+    private jmpToBlock(label: string, traceback: number | undefined) {
+        const location = this.lookUpTable[label]
+        if (location === undefined) throw 'ILLEGAL_JMP'
         if (traceback !== undefined) {
-            this.exitToPreviousContext.push(() => {
+            this.tracebackStack.push(() => {
                 this.programCounter = traceback
             })
         }
+        this.blockLabelStack.push(label)
         this.programCounter = location
     }
 
@@ -231,32 +236,29 @@ export default class VM {
         this.opcodeHandlers[Opcode.JMP] = () => {
             const label = this.stack.pop()
 
-            const location = this.lookUpTable[label]
-            if (location === undefined) throw 'ILLEGAL_JMP'
-            this.jmpToBlock(location, this.programCounter)
+            this.jmpToBlock(label, this.programCounter)
         }
         this.opcodeHandlers[Opcode.JMP_IF_ELSE] = () => {
             const label$2 = this.stack.pop()
             const label$1 = this.stack.pop()
             const expression = this.stack.pop()
 
-            let location: number
             if (expression) {
-                location = this.lookUpTable[label$1]
+                this.jmpToBlock(label$1, this.programCounter)
             } else if (label$2 !== undefined) {
-                location = this.lookUpTable[label$2]
-            } else {
-                return
+                this.jmpToBlock(label$2, this.programCounter)
             }
-            if (location === undefined) throw 'ILLEGAL_JMP'
-            this.jmpToBlock(location, this.programCounter)
         }
         this.opcodeHandlers[Opcode.JMP_NO_TRACEBACK] = () => {
             const label = this.stack.pop()
 
-            const location = this.lookUpTable[label]
-            if (location === undefined) throw 'ILLEGAL_JMP'
-            this.jmpToBlock(location, undefined)
+            this.jmpToBlock(label, undefined)
+        }
+        this.opcodeHandlers[Opcode.LOOP] = () => {
+            const label = this.blockLabelStack.at(-1)
+            if (!label) throw 'LOOP_LABEL_NOT_FOUND'
+
+            this.jmpToBlock(label, undefined)
         }
         this.opcodeHandlers[Opcode.AND] = () => {
             const arg$2 = this.stack.pop()
@@ -308,7 +310,7 @@ export default class VM {
             this.stack.push([v])
         }
         this.opcodeHandlers[Opcode.EXIT] = () => {
-            const func = this.exitToPreviousContext.pop()
+            const func = this.tracebackStack.pop()
             if (func === undefined) throw 'EMPTY_TRACEBACK'
             func()
         }
