@@ -557,6 +557,45 @@ export default class Compiler {
         this.blocks.shift()
     }
 
+    private translateForLoop(node: babel.types.ForStatement) {
+        let block: Block = {
+            instructions: [],
+            inheritsContext: true,
+        }
+        const label = `for_${node.start}:${node.end}`
+
+        if (node.init) {
+            if (node.init.type === 'VariableDeclaration') {
+                this.buildIL([node.init])
+            } else if (babel.types.isExpression(node.init)) {
+                this.buildIL([babel.types.expressionStatement(node.init)])
+            }
+        }
+
+        this.appendJmpInstruction(this.createStringArgument(label))
+        this.il[label] = block
+
+        this.blocks.unshift(block)
+
+        if (node.test) {
+            this.appendPushInstruction(this.translateExpression(node.test))
+            this.appendNotInstruction()
+            this.appendExitIfInstruction()
+        }
+
+        if (node.body.type === 'BlockStatement') {
+            this.buildIL(node.body.body)
+        } else {
+            this.buildIL([node.body])
+        }
+
+        if (node.update) {
+            this.buildIL([babel.types.expressionStatement(node.update)])
+        }
+        this.appendJmpInstruction(this.createStringArgument(label), false)
+        this.blocks.shift()
+    }
+
     private translateIfStatement(node: babel.types.IfStatement) {
         let block: Block = {
             instructions: [],
@@ -652,6 +691,10 @@ export default class Compiler {
                     this.translateWhileLoop(statement)
                     break
 
+                case 'ForStatement':
+                    this.translateForLoop(statement)
+                    break
+
                 case 'VariableDeclaration':
                     this.translateVariableDeclaration(statement)
                     break
@@ -676,6 +719,11 @@ export default class Compiler {
                             throw 'UNHANDLED_EXPRESSION_STATEMENT'
                     }
                     break
+
+                case 'BreakStatement':
+                    this.appendExitInstruction()
+                    break
+
                 default:
                     console.error(statement.type)
                     throw 'UNHANDLED_NODE'
@@ -685,6 +733,7 @@ export default class Compiler {
 
     compile() {
         this.buildIL(this.ast.program.body)
+        this.appendExitInstruction()
         return this.il
     }
 }
