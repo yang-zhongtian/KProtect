@@ -267,11 +267,6 @@ export default class VM {
         this.opcodeHandlers[Opcode.OR] = () => {
             throw 'UNFINISHED'
         }
-        this.opcodeHandlers[Opcode.NOT] = () => {
-            const expression = this.stack.pop()
-
-            this.stack.push(!expression)
-        }
         this.opcodeHandlers[Opcode.BITWISE_AND] = () => {
             throw 'UNFINISHED'
         }

@@ -38,7 +38,6 @@ export const enum Opcode {
     JMP_NO_TRACEBACK,
     AND,
     OR,
-    NOT,
     BITWISE_AND,
     BITWISE_OR,
     BITWISE_XOR,

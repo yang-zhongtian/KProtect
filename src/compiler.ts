@@ -236,7 +236,7 @@ export default class Compiler {
 
     private appendNotInstruction() {
         this.pushInstruction({
-            opcode: Opcode.NOT,
+            opcode: Opcode.NEG,
             args: []
         })
     }
