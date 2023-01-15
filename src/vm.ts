@@ -1,15 +1,43 @@
 import {Header, Opcode} from './constant'
 import {inflateRaw} from 'pako'
 
+class Stack<T> {
+    private stack: T[]
+
+    constructor() {
+        this.stack = []
+    }
+
+    push(element: T): void {
+        this.stack.push(element)
+    }
+
+    pop(): T | undefined {
+        return this.stack.pop()
+    }
+
+    top(): T | undefined {
+        return this.stack.at(-1)
+    }
+
+    isEmpty(): boolean {
+        return this.stack.length === 0
+    }
+
+    size(): number {
+        return this.stack.length
+    }
+}
+
 export default class VM {
     private readonly bytecode: Uint8Array
     private readonly strings: string[]
     private readonly dependencies: any[]
     private readonly lookUpTable: { [index: string]: number }
     private readonly opcodeHandlers: any[]
-    private readonly stack: any[]
-    private readonly tracebackStack: Function[]
-    private readonly blockLabelStack: string[]
+    private readonly stack: Stack<any>
+    private readonly tracebackStack: Stack<Function>
+    private readonly blockLabelStack: Stack<string>
     private readonly localVariables: any[]
     private programCounter: number
 
@@ -19,16 +47,17 @@ export default class VM {
         this.strings = strings
         this.dependencies = [window, console]
         this.opcodeHandlers = []
-        this.stack = []
+        this.stack = new Stack()
         this.localVariables = []
         this.lookUpTable = lookUpTable
 
-        this.tracebackStack = [() => {
+        this.tracebackStack = new Stack()
+        this.tracebackStack.push(() => {
             // if we call this function from main context then we just exit
             this.programCounter = this.bytecode.length + 1
             // this.programCounter = +inf
-        }]
-        this.blockLabelStack = []
+        })
+        this.blockLabelStack = new Stack()
         this.programCounter = 0
         this.initOpcodeHandlers()
     }
@@ -255,7 +284,7 @@ export default class VM {
             this.jmpToBlock(label, undefined)
         }
         this.opcodeHandlers[Opcode.LOOP] = () => {
-            const label = this.blockLabelStack.at(-1)
+            const label = this.blockLabelStack.top()
             if (!label) throw 'LOOP_LABEL_NOT_FOUND'
 
             this.jmpToBlock(label, undefined)
