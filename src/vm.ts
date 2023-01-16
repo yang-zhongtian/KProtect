@@ -177,7 +177,7 @@ export default class VM {
         this.opcodeHandlers[Opcode.STORE] = () => {
             const dst = this.getValue()
 
-            this.localVariables[dst] = this.getValue()
+            this.stack.push(this.localVariables[dst] = this.getValue())
         }
         this.opcodeHandlers[Opcode.GET_PROPERTY] = () => {
             const property = this.stack.pop()
@@ -190,7 +190,7 @@ export default class VM {
             const base = this.stack.pop()
             const value = this.stack.pop()
 
-            base[property] = value
+            this.stack.push(base[property] = value)
         }
         this.opcodeHandlers[Opcode.EXISTS] = () => {
             throw 'UNFINISHED'
@@ -199,7 +199,7 @@ export default class VM {
             const property = this.stack.pop()
             const base = this.stack.pop()
 
-            delete base[property]
+            this.stack.push(delete base[property])
         }
         this.opcodeHandlers[Opcode.IN] = () => {
             const property = this.stack.pop()
@@ -424,5 +424,6 @@ export default class VM {
             // console.log(this.programCounter)
             handler()
         }
+        console.log(this.stack)
     }
 }

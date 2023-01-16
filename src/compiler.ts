@@ -164,6 +164,12 @@ export default class Compiler {
                 this.appendPopInstruction(this.createNumberArgument(target))
                 return this.createVariableArgument(target)
 
+            case 'AssignmentExpression':
+                this.translateVariableAssignment(node.left, node.right)
+                target = this.contexts[0].counter++
+                this.appendPopInstruction(this.createNumberArgument(target))
+                return this.createVariableArgument(target)
+
             case 'CallExpression':
                 this.pushCallExpressionOntoStack(node)
                 target = this.contexts[0].counter++
@@ -225,6 +231,7 @@ export default class Compiler {
                     this.appendPopInstruction(this.createNumberArgument(target))
                     return this.createVariableArgument(target)
                 }
+
             default:
                 console.error(node)
                 throw 'UNHANDLED_VALUE'
@@ -441,6 +448,42 @@ export default class Compiler {
             case '>=':
                 this.pushInstruction({
                     opcode: Opcode.GREATER_THAN_EQUAL,
+                    args: []
+                })
+                break
+            case '<<':
+                this.pushInstruction({
+                    opcode: Opcode.BITWISE_LEFT_SHIFT,
+                    args: []
+                })
+                break
+            case '>>':
+                this.pushInstruction({
+                    opcode: Opcode.BITWISE_RIGHT_SHIFT,
+                    args: []
+                })
+                break
+            case '>>>':
+                this.pushInstruction({
+                    opcode: Opcode.BITWISE_UNSIGNED_RIGHT_SHIFT,
+                    args: []
+                })
+                break
+            case '&':
+                this.pushInstruction({
+                    opcode: Opcode.BITWISE_AND,
+                    args: []
+                })
+                break
+            case '|':
+                this.pushInstruction({
+                    opcode: Opcode.BITWISE_OR,
+                    args: []
+                })
+                break
+            case '^':
+                this.pushInstruction({
+                    opcode: Opcode.BITWISE_XOR,
                     args: []
                 })
                 break
