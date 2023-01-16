@@ -20,7 +20,7 @@ export const enum Opcode {
     GET_PROPERTY,
     SET_PROPERTY,
     EXISTS,
-    DELETE_PROPERTY,
+    DELETE,
     IN,
     INSTANCE_OF,
     TYPEOF,
@@ -53,7 +53,6 @@ export const enum Opcode {
     EXIT_IF,
     VOID,
     THROW,
-    DELETE,
     APPLY,
     CALL_MEMBER_EXPRESSION,
 }
