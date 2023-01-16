@@ -186,19 +186,32 @@ export default class VM {
             this.stack.push(base[property])
         }
         this.opcodeHandlers[Opcode.SET_PROPERTY] = () => {
-            throw 'UNFINISHED'
+            const property = this.stack.pop()
+            const base = this.stack.pop()
+            const value = this.stack.pop()
+
+            base[property] = value
         }
         this.opcodeHandlers[Opcode.EXISTS] = () => {
             throw 'UNFINISHED'
         }
-        this.opcodeHandlers[Opcode.DELETE_PROPERTY] = () => {
-            throw 'UNFINISHED'
+        this.opcodeHandlers[Opcode.DELETE] = () => {
+            const property = this.stack.pop()
+            const base = this.stack.pop()
+
+            delete base[property]
         }
         this.opcodeHandlers[Opcode.IN] = () => {
-            throw 'UNFINISHED'
+            const property = this.stack.pop()
+            const base = this.stack.pop()
+
+            this.stack.push(property in base)
         }
         this.opcodeHandlers[Opcode.INSTANCE_OF] = () => {
-            throw 'UNFINISHED'
+            const constructor = this.stack.pop()
+            const base = this.stack.pop()
+
+            this.stack.push(base instanceof constructor)
         }
         this.opcodeHandlers[Opcode.TYPEOF] = () => {
             const expression = this.stack.pop()
@@ -295,25 +308,46 @@ export default class VM {
             this.stack.push(arg$1 && arg$2)
         }
         this.opcodeHandlers[Opcode.OR] = () => {
-            throw 'UNFINISHED'
+            const arg$2 = this.stack.pop()
+            const arg$1 = this.stack.pop()
+
+            this.stack.push(arg$1 || arg$2)
         }
         this.opcodeHandlers[Opcode.BITWISE_AND] = () => {
-            throw 'UNFINISHED'
+            const arg$2 = this.stack.pop()
+            const arg$1 = this.stack.pop()
+
+            this.stack.push(arg$1 & arg$2)
         }
         this.opcodeHandlers[Opcode.BITWISE_OR] = () => {
-            throw 'UNFINISHED'
+            const arg$2 = this.stack.pop()
+            const arg$1 = this.stack.pop()
+
+            this.stack.push(arg$1 | arg$2)
         }
         this.opcodeHandlers[Opcode.BITWISE_XOR] = () => {
-            throw 'UNFINISHED'
+            const arg$2 = this.stack.pop()
+            const arg$1 = this.stack.pop()
+
+            this.stack.push(arg$1 ^ arg$2)
         }
         this.opcodeHandlers[Opcode.BITWISE_LEFT_SHIFT] = () => {
-            throw 'UNFINISHED'
+            const arg$2 = this.stack.pop()
+            const arg$1 = this.stack.pop()
+
+            this.stack.push(arg$1 << arg$2)
         }
         this.opcodeHandlers[Opcode.BITWISE_RIGHT_SHIFT] = () => {
-            throw 'UNFINISHED'
+            const arg$2 = this.stack.pop()
+            const arg$1 = this.stack.pop()
+
+            this.stack.push(arg$1 >> arg$2)
         }
         this.opcodeHandlers[Opcode.BITWISE_UNSIGNED_RIGHT_SHIFT] = () => {
-            throw 'UNFINISHED'
+            const arg$2 = this.stack.pop()
+            const arg$1 = this.stack.pop()
+
+            this.stack.push(arg$1 >>> arg$2)
         }
         this.opcodeHandlers[Opcode.PUSH] = () => {
             this.stack.push(this.getValue())
@@ -352,10 +386,7 @@ export default class VM {
             throw 'UNFINISHED'
         }
         this.opcodeHandlers[Opcode.THROW] = () => {
-            throw 'UNFINISHED'
-        }
-        this.opcodeHandlers[Opcode.DELETE] = () => {
-            throw 'UNFINISHED'
+            throw this.stack.pop()
         }
 
         this.opcodeHandlers[Opcode.APPLY] = () => {
