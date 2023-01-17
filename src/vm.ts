@@ -374,6 +374,16 @@ export default class VM {
             }
             this.stack.push(arr)
         }
+        this.opcodeHandlers[Opcode.INIT_OBJECT] = () => {
+            const cnt = this.getValue()
+            const obj = Object.create(null)
+            for (let i = 0; i < cnt; i++) {
+                const key = this.stack.pop()
+                const val = this.stack.pop()
+                obj[key] = val
+            }
+            this.stack.push(obj)
+        }
         this.opcodeHandlers[Opcode.EXIT] = () => {
             const func = this.tracebackStack.pop()
             if (func === undefined) throw 'EMPTY_TRACEBACK'

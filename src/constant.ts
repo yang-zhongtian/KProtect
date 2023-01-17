@@ -49,6 +49,7 @@ export const enum Opcode {
     POP,
     INIT_CONSTRUCTOR,
     INIT_ARRAY,
+    INIT_OBJECT,
     EXIT,
     EXIT_IF,
     VOID,

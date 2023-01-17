@@ -149,7 +149,8 @@ export default class Compiler {
         }
     }
 
-    private translateExpression(node: babel.types.Expression | babel.types.SpreadElement | babel.types.JSXNamespacedName | babel.types.ArgumentPlaceholder | undefined | null): InstructionArgument {
+    private translateExpression(node: babel.types.Expression | babel.types.SpreadElement | babel.types.JSXNamespacedName | babel.types.ArgumentPlaceholder | babel.types.PrivateName | undefined | null): InstructionArgument {
+        if (babel.types.isPrivateName(node)) throw 'UNSUPPORTED_PRIVATE_NAME' // TODO
         if (node === undefined || node === null) {
             return {
                 type: Header.LOAD_UNDEFINED,
@@ -213,6 +214,10 @@ export default class Compiler {
             case 'ArrayExpression':
                 const array = this.declareArrVariable(node.elements)
                 return this.createVariableArgument(array)
+
+            case 'ObjectExpression':
+                const object = this.declareObjVariable(node.properties)
+                return this.createVariableArgument(object)
 
             case 'UpdateExpression':
                 target = node.argument
@@ -313,6 +318,13 @@ export default class Compiler {
         })
     }
 
+    private appendInitObjectInstruction(cnt: InstructionArgument) {
+        this.pushInstruction({
+            opcode: Opcode.INIT_OBJECT,
+            args: [cnt]
+        })
+    }
+
     private appendJmpInstruction(arg: InstructionArgument, traceback = true) {
         this.pushInstruction({
             opcode: traceback ? Opcode.JMP : Opcode.JMP_NO_TRACEBACK,
@@ -358,6 +370,34 @@ export default class Compiler {
         } else {
             this.appendInitArrayInstruction(this.createNumberArgument(0))
         }
+        const target = this.contexts[0].counter++
+        this.appendPopInstruction(this.createNumberArgument(target))
+        return target
+    }
+
+    private declareObjVariable(properties: (babel.types.ObjectMethod | babel.types.ObjectProperty | babel.types.SpreadElement)[]): number {
+        let cnt = 0
+        for (const i in properties) {
+            const property = properties[i]
+            switch (property.type) {
+                case 'ObjectProperty':
+                    if (babel.types.isPatternLike(property.value)) {
+                        throw 'UNHANDLED_VALUE'
+                    }
+                    this.appendPushInstruction(this.translateExpression(property.value))
+                    if (property.key.type === 'Identifier') {
+                        this.appendPushInstruction(this.createStringArgument(property.key.name))
+                    } else {
+                        this.appendPushInstruction(this.translateExpression(property.key))
+                    }
+                    break
+                default:
+                    console.error(properties[i])
+                    throw 'UNHANDLED_PROPERTY'
+            }
+            cnt++
+        }
+        this.appendInitObjectInstruction(this.createNumberArgument(cnt))
         const target = this.contexts[0].counter++
         this.appendPopInstruction(this.createNumberArgument(target))
         return target
