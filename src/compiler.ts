@@ -149,7 +149,8 @@ export default class Compiler {
         }
     }
 
-    private translateExpression(node: babel.types.Expression | babel.types.SpreadElement | babel.types.JSXNamespacedName | babel.types.ArgumentPlaceholder | undefined | null): InstructionArgument {
+    private translateExpression(node: babel.types.Expression | babel.types.SpreadElement | babel.types.JSXNamespacedName | babel.types.ArgumentPlaceholder | babel.types.PrivateName | undefined | null): InstructionArgument {
+        if (babel.types.isPrivateName(node)) throw 'UNSUPPORTED_PRIVATE_NAME' // TODO
         if (node === undefined || node === null) {
             return {
                 type: Header.LOAD_UNDEFINED,
@@ -211,18 +212,12 @@ export default class Compiler {
                 return this.createNumberArgument(node.value)
 
             case 'ArrayExpression':
-                const array = this.declareArrVariable()
-
-                node.elements.forEach(item => {
-                    this.appendPushInstruction(this.createVariableArgument(array))
-                    this.appendPushInstruction(this.createStringArgument('push'))
-                    this.appendPushInstruction(this.createVariableArgument(this.declareArrVariableWithValue(item)))
-
-                    this.appendCallMemberExpression()
-                    this.appendPopInstruction(this.createUndefinedArgument())
-                })
-
+                const array = this.declareArrVariable(node.elements)
                 return this.createVariableArgument(array)
+
+            case 'ObjectExpression':
+                const object = this.declareObjVariable(node.properties)
+                return this.createVariableArgument(object)
 
             case 'UpdateExpression':
                 target = node.argument
@@ -295,6 +290,7 @@ export default class Compiler {
     }
 
     private appendPopInstruction(arg: InstructionArgument) {
+        // arg: A numberArgument that marks a variable, except it's undefined
         this.pushInstruction({
             opcode: Opcode.POP,
             args: [arg]
@@ -315,10 +311,17 @@ export default class Compiler {
         })
     }
 
-    private appendInitArrayInstruction() {
+    private appendInitArrayInstruction(cnt: InstructionArgument) {
         this.pushInstruction({
             opcode: Opcode.INIT_ARRAY,
-            args: []
+            args: [cnt]
+        })
+    }
+
+    private appendInitObjectInstruction(cnt: InstructionArgument) {
+        this.pushInstruction({
+            opcode: Opcode.INIT_OBJECT,
+            args: [cnt]
         })
     }
 
@@ -357,18 +360,44 @@ export default class Compiler {
         })
     }
 
-    private declareArrVariable(): number {
+    private declareArrVariable(argument?: (babel.types.Expression | babel.types.SpreadElement | babel.types.JSXNamespacedName | babel.types.ArgumentPlaceholder | undefined | null)[]): number {
+        if (argument !== undefined) {
+            const length = argument.length ?? 0
+            for (let i = length - 1; i >= 0; i--) {
+                this.appendPushInstruction(this.translateExpression(argument[i]))
+            }
+            this.appendInitArrayInstruction(this.createNumberArgument(length))
+        } else {
+            this.appendInitArrayInstruction(this.createNumberArgument(0))
+        }
         const target = this.contexts[0].counter++
-        this.appendStoreInstruction([
-            this.createNumberArgument(target),
-            this.createArrayArgument()
-        ])
+        this.appendPopInstruction(this.createNumberArgument(target))
         return target
     }
 
-    private declareArrVariableWithValue(argument: babel.types.Expression | babel.types.SpreadElement | babel.types.JSXNamespacedName | babel.types.ArgumentPlaceholder | undefined | null): number {
-        this.appendPushInstruction(this.translateExpression(argument))
-        this.appendInitArrayInstruction()
+    private declareObjVariable(properties: (babel.types.ObjectMethod | babel.types.ObjectProperty | babel.types.SpreadElement)[]): number {
+        let cnt = 0
+        for (const i in properties) {
+            const property = properties[i]
+            switch (property.type) {
+                case 'ObjectProperty':
+                    if (babel.types.isPatternLike(property.value)) {
+                        throw 'UNHANDLED_VALUE'
+                    }
+                    this.appendPushInstruction(this.translateExpression(property.value))
+                    if (property.key.type === 'Identifier') {
+                        this.appendPushInstruction(this.createStringArgument(property.key.name))
+                    } else {
+                        this.appendPushInstruction(this.translateExpression(property.key))
+                    }
+                    break
+                default:
+                    console.error(properties[i])
+                    throw 'UNHANDLED_PROPERTY'
+            }
+            cnt++
+        }
+        this.appendInitObjectInstruction(this.createNumberArgument(cnt))
         const target = this.contexts[0].counter++
         this.appendPopInstruction(this.createNumberArgument(target))
         return target
@@ -507,70 +536,24 @@ export default class Compiler {
     }
 
     private pushMemberExpressionOntoStack(node: babel.types.MemberExpression) {
-        switch (node.object.type) {
-            case 'Identifier':
-                // 举例:
-                // console.log("test") ->
-                // var bb = console["log"]
-                // bb("test")
+        // 举例:
+        // console.log("test") ->
+        // var bb = console["log"]
+        // bb("test")
+        this.appendPushInstruction(this.translateExpression(node.object))
 
-                // 依赖命中
-                if (this.isADependency(node.object.name)) {
-                    this.appendPushInstruction(this.createDependencyArgument(this.getDependencyPointer(node.object.name)))
-                } else {
-                    console.error(node.object.name)
-                    throw 'BASE_NOT_DEPENDENCY'
-                }
-                if (node.property.type !== 'Identifier') throw 'UNSUPPORTED_PROPERTY_TYPE'
-                break
-
-            case 'CallExpression':
-                this.pushCallExpressionOntoStack(node.object)
-                break
-
-            default:
-                console.error(node.object)
-                throw 'UNHANDLED_MEMBER_EXPRESSION_STATE'
+        if (node.property.type === 'Identifier') {
+            this.appendPushInstruction(this.createStringArgument(node.property.name))
+        } else if (babel.types.isExpression(node.property)) {
+            this.appendPushInstruction(this.translateExpression(node.property))
+        } else {
+            throw 'UNHANDLED_PROPERTY_TYPE'
         }
-
-        if (node.property.type !== 'Identifier') throw 'UNHANDLED_PROPERTY_TYPE'
-
-        this.appendPushInstruction(this.createStringArgument(node.property.name))
     }
 
-
-    // We translate call arguments by constructing an array of all elements
-    // 1) Defining a new variable with empty array
-    // 2) EXEC Push this variable reference onto stack
-    // 3) EXEC Push "push" string onto stack
-    // 4) EXEC Get_Property and pushes onto top of stack
-    // 5) EXEC Push "argument"
-    // 6) EXEC Call
-    // returns a pointer to the arguments array
-    private pushCallArgumentsOntoStack(args: Array<babel.types.Expression | babel.types.SpreadElement | babel.types.JSXNamespacedName | babel.types.ArgumentPlaceholder>): number {
-        // define argument array
-        const argumentsArrayToCall = this.declareArrVariable()
-
-        args.forEach(argument => {
-            const initializedArrPointer = this.declareArrVariableWithValue(argument)
-
-            // pushes a reference onto stack
-            this.appendPushInstruction(this.createArrayArgument())
-            this.appendPushInstruction(this.createStringArgument('push'))
-
-            this.appendGetPropertyInstruction()
-
-            this.appendPushInstruction(this.createVariableArgument(argumentsArrayToCall))
-            this.appendPushInstruction(this.createVariableArgument(initializedArrPointer))
-
-            this.appendApplyInstruction()
-        })
-
-        return argumentsArrayToCall
-    }
 
     private pushCallExpressionOntoStack(node: babel.types.CallExpression) {
-        const targetOfCallArguments = this.pushCallArgumentsOntoStack(node.arguments)
+        const targetOfCallArguments = this.declareArrVariable(node.arguments)
         switch (node.callee.type) {
             case 'MemberExpression':
                 this.pushMemberExpressionOntoStack(node.callee)

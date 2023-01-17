@@ -367,9 +367,22 @@ export default class VM {
             this.stack.push(new c(val))
         }
         this.opcodeHandlers[Opcode.INIT_ARRAY] = () => {
-            const v = this.stack.pop()
-
-            this.stack.push([v])
+            const cnt = this.getValue()
+            const arr = []
+            for (let i = 0; i < cnt; i++) {
+                arr.push(this.stack.pop())
+            }
+            this.stack.push(arr)
+        }
+        this.opcodeHandlers[Opcode.INIT_OBJECT] = () => {
+            const cnt = this.getValue()
+            const obj = Object.create(null)
+            for (let i = 0; i < cnt; i++) {
+                const key = this.stack.pop()
+                const val = this.stack.pop()
+                obj[key] = val
+            }
+            this.stack.push(obj)
         }
         this.opcodeHandlers[Opcode.EXIT] = () => {
             const func = this.tracebackStack.pop()
