@@ -507,35 +507,19 @@ export default class Compiler {
     }
 
     private pushMemberExpressionOntoStack(node: babel.types.MemberExpression) {
-        switch (node.object.type) {
-            case 'Identifier':
-                // 举例:
-                // console.log("test") ->
-                // var bb = console["log"]
-                // bb("test")
+        // 举例:
+        // console.log("test") ->
+        // var bb = console["log"]
+        // bb("test")
+        this.appendPushInstruction(this.translateExpression(node.object))
 
-                // 依赖命中
-                if (this.isADependency(node.object.name)) {
-                    this.appendPushInstruction(this.createDependencyArgument(this.getDependencyPointer(node.object.name)))
-                } else {
-                    console.error(node.object.name)
-                    throw 'BASE_NOT_DEPENDENCY'
-                }
-                if (node.property.type !== 'Identifier') throw 'UNSUPPORTED_PROPERTY_TYPE'
-                break
-
-            case 'CallExpression':
-                this.pushCallExpressionOntoStack(node.object)
-                break
-
-            default:
-                console.error(node.object)
-                throw 'UNHANDLED_MEMBER_EXPRESSION_STATE'
+        if (node.property.type === 'Identifier') {
+            this.appendPushInstruction(this.createStringArgument(node.property.name))
+        } else if (babel.types.isExpression(node.property)) {
+            this.appendPushInstruction(this.translateExpression(node.property))
+        } else {
+            throw 'UNHANDLED_PROPERTY_TYPE'
         }
-
-        if (node.property.type !== 'Identifier') throw 'UNHANDLED_PROPERTY_TYPE'
-
-        this.appendPushInstruction(this.createStringArgument(node.property.name))
     }
 
 
