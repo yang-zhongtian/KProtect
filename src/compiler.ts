@@ -210,6 +210,20 @@ export default class Compiler {
             case 'NumericLiteral':
                 return this.createNumberArgument(node.value)
 
+            case 'ArrayExpression':
+                const array = this.declareArrVariable()
+
+                node.elements.forEach(item => {
+                    this.appendPushInstruction(this.createVariableArgument(array))
+                    this.appendPushInstruction(this.createStringArgument('push'))
+                    this.appendPushInstruction(this.createVariableArgument(this.declareArrVariableWithValue(item)))
+
+                    this.appendCallMemberExpression()
+                    this.appendPopInstruction(this.createUndefinedArgument())
+                })
+
+                return this.createVariableArgument(array)
+
             case 'UpdateExpression':
                 target = node.argument
                 if (target.type !== 'Identifier') throw 'INVALID_UPDATE'
