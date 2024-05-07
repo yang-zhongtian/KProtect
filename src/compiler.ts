@@ -215,7 +215,7 @@ export default class Compiler {
         value: null
       }
     }
-    let target
+    let target: any
     switch (node.type) {
       case 'UnaryExpression':
         this.translateUnaryExpression(node)
