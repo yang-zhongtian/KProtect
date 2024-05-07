@@ -27,7 +27,9 @@ enum StubType {
   CONDITION_END,
   LOOP_START,
   LOOP_UPDATE,
-  LOOP_END
+  LOOP_END,
+  FUNCTION_START,
+  OEP
 }
 
 class Context {
@@ -80,7 +82,7 @@ export default class Compiler {
   ir: Block
   private readonly stubStack: Stub[]
   private stubCounter: number
-  private readonly globalFunctions: Set<string>
+  private readonly functionTable: Map<string, Stub>
 
   constructor(source: string) {
     this.ast = this.parse(source)
@@ -96,7 +98,7 @@ export default class Compiler {
     this.ir = this.makeNewBlock()
     this.stubStack = []
     this.stubCounter = 0
-    this.globalFunctions = new Set()
+    this.functionTable = new Map()
   }
 
   private parse(source: string) {
@@ -125,12 +127,12 @@ export default class Compiler {
     return this.dependenciesUnderWindow.includes(name)
   }
 
-  private getDependencyPointer(name: string) {
-    return this.dependencies.indexOf(name)
+  private isAFunction(name: string) {
+    return this.functionTable.has(name)
   }
 
-  private getDependencyExpressionUnderWindow(node: babel.types.Identifier) {
-    return babel.types.memberExpression(babel.types.identifier('window'), node)
+  private getDependencyPointer(name: string) {
+    return this.dependencies.indexOf(name)
   }
 
   private pushInstruction(instruction: Instruction) {
@@ -186,6 +188,10 @@ export default class Compiler {
     }
   }
 
+  private translateDependencyExpressionUnderWindow(node: babel.types.Identifier) {
+    return this.translateExpression(babel.types.memberExpression(babel.types.identifier('window'), node))
+  }
+
   private translateUnaryExpression(node: babel.types.UnaryExpression) {
     this.appendPushInstruction(this.translateExpression(node.argument))
 
@@ -236,6 +242,12 @@ export default class Compiler {
         this.appendPopInstruction(this.createNumberArgument(target))
         return this.createVariableArgument(target)
 
+      case 'LogicalExpression':
+        this.translateLogicalExpression(node)
+        target = this.context.incr()
+        this.appendPopInstruction(this.createNumberArgument(target))
+        return this.createVariableArgument(target)
+
       case 'StringLiteral':
         return this.createStringArgument(node.value)
 
@@ -244,7 +256,7 @@ export default class Compiler {
           return this.createDependencyArgument(this.getDependencyPointer(node.name))
         }
         if (this.isADependencyUnderWindow(node.name)) {
-          return this.translateExpression(this.getDependencyExpressionUnderWindow(node))
+          return this.translateDependencyExpressionUnderWindow(node)
         }
 
         const reg = this.context.get(node.name)
@@ -312,13 +324,6 @@ export default class Compiler {
     })
   }
 
-  private appendCallMemberExpression() {
-    this.pushInstruction({
-      opcode: Opcode.CALL_MEMBER_EXPRESSION,
-      args: []
-    })
-  }
-
   private appendPushInstruction(arg: InstructionArgument) {
     this.pushInstruction({
       opcode: Opcode.PUSH,
@@ -330,13 +335,6 @@ export default class Compiler {
     this.pushInstruction({
       opcode: Opcode.POP,
       args: [arg]
-    })
-  }
-
-  private appendCallInstruction() {
-    this.pushInstruction({
-      opcode: Opcode.CALL,
-      args: []
     })
   }
 
@@ -389,6 +387,20 @@ export default class Compiler {
     })
   }
 
+  private appendPushStackFrameInstruction() {
+    this.pushInstruction({
+      opcode: Opcode.PUSH_STACK_FRAME,
+      args: []
+    })
+  }
+
+  private appendPopStackFrameInstruction() {
+    this.pushInstruction({
+      opcode: Opcode.POP_STACK_FRAME,
+      args: []
+    })
+  }
+
   private declareArrVariable(): number {
     const target = this.context.incr()
     this.appendStoreInstruction([
@@ -412,88 +424,261 @@ export default class Compiler {
   private translateBinaryExpression(node: babel.types.BinaryExpression) {
     if (node.left.type === 'PrivateName') throw 'UNHANDLED_PRIVATE_NAME'
 
-    const left = this.translateExpression(node.left)
-    const right = this.translateExpression(node.right)
-
-    this.appendPushInstruction(left)
-    this.appendPushInstruction(right)
+    let left: InstructionArgument, right: InstructionArgument
 
     switch (node.operator) {
       case '==':
+        left = this.translateExpression(node.left)
+        right = this.translateExpression(node.right)
+        this.appendPushInstruction(left)
+        this.appendPushInstruction(right)
         this.pushInstruction({
           opcode: Opcode.EQUAL,
           args: []
         })
         break
       case '===':
-        this.pushInstruction({
-          opcode: Opcode.STRICT_EQUAL,
-          args: []
-        })
+        this.appendPushInstruction(
+          this.translateExpression(
+            babel.types.logicalExpression(
+              '&&',
+              babel.types.binaryExpression(
+                '==',
+                node.left,
+                node.right
+              ),
+              babel.types.binaryExpression(
+                '==',
+                babel.types.unaryExpression('typeof', node.left),
+                babel.types.unaryExpression('typeof', node.right)
+              )
+            )
+          )
+        )
         break
       case '!=':
+        left = this.translateExpression(node.left)
+        right = this.translateExpression(node.right)
+        this.appendPushInstruction(left)
+        this.appendPushInstruction(right)
         this.pushInstruction({
           opcode: Opcode.NOT_EQUAL,
           args: []
         })
         break
       case '!==':
-        this.pushInstruction({
-          opcode: Opcode.STRICT_NOT_EQUAL,
-          args: []
-        })
+        this.appendPushInstruction(
+          this.translateExpression(
+            babel.types.logicalExpression(
+              '||',
+              babel.types.binaryExpression(
+                '!=',
+                node.left,
+                node.right
+              ),
+              babel.types.binaryExpression(
+                '!=',
+                babel.types.unaryExpression('typeof', node.left),
+                babel.types.unaryExpression('typeof', node.right)
+              )
+            )
+          )
+        )
         break
       case '+':
+        left = this.translateExpression(node.left)
+        right = this.translateExpression(node.right)
+        this.appendPushInstruction(left)
+        this.appendPushInstruction(right)
         this.pushInstruction({
           opcode: Opcode.ADD,
           args: []
         })
         break
       case '-':
+        left = this.translateExpression(node.left)
+        right = this.translateExpression(node.right)
+        this.appendPushInstruction(left)
+        this.appendPushInstruction(right)
         this.pushInstruction({
           opcode: Opcode.SUB,
           args: []
         })
         break
       case '*':
+        left = this.translateExpression(node.left)
+        right = this.translateExpression(node.right)
+        this.appendPushInstruction(left)
+        this.appendPushInstruction(right)
         this.pushInstruction({
           opcode: Opcode.MUL,
           args: []
         })
         break
       case '/':
+        left = this.translateExpression(node.left)
+        right = this.translateExpression(node.right)
+        this.appendPushInstruction(left)
+        this.appendPushInstruction(right)
         this.pushInstruction({
           opcode: Opcode.DIV,
           args: []
         })
         break
       case '%':
+        left = this.translateExpression(node.left)
+        right = this.translateExpression(node.right)
+        this.appendPushInstruction(left)
+        this.appendPushInstruction(right)
         this.pushInstruction({
           opcode: Opcode.MOD,
           args: []
         })
         break
       case '<':
+        left = this.translateExpression(node.left)
+        right = this.translateExpression(node.right)
+        this.appendPushInstruction(left)
+        this.appendPushInstruction(right)
         this.pushInstruction({
           opcode: Opcode.LESS_THAN,
           args: []
         })
         break
       case '<=':
-        this.pushInstruction({
-          opcode: Opcode.LESS_THAN_EQUAL,
-          args: []
-        })
+        this.appendPushInstruction(
+          this.translateExpression(
+            babel.types.logicalExpression(
+              '||',
+              babel.types.binaryExpression(
+                '<',
+                node.left,
+                node.right
+              ),
+              babel.types.binaryExpression(
+                '==',
+                node.left,
+                node.right
+              )
+            )
+          )
+        )
         break
       case '>':
+        left = this.translateExpression(node.left)
+        right = this.translateExpression(node.right)
+        this.appendPushInstruction(left)
+        this.appendPushInstruction(right)
         this.pushInstruction({
           opcode: Opcode.GREATER_THAN,
           args: []
         })
         break
       case '>=':
+        this.appendPushInstruction(
+          this.translateExpression(
+            babel.types.logicalExpression(
+              '||',
+              babel.types.binaryExpression(
+                '>',
+                node.left,
+                node.right
+              ),
+              babel.types.binaryExpression(
+                '==',
+                node.left,
+                node.right
+              )
+            )
+          )
+        )
+        break
+      case '&':
+        left = this.translateExpression(node.left)
+        right = this.translateExpression(node.right)
+        this.appendPushInstruction(left)
+        this.appendPushInstruction(right)
         this.pushInstruction({
-          opcode: Opcode.GREATER_THAN_EQUAL,
+          opcode: Opcode.BITWISE_AND,
+          args: []
+        })
+        break
+      case '|':
+        left = this.translateExpression(node.left)
+        right = this.translateExpression(node.right)
+        this.appendPushInstruction(left)
+        this.appendPushInstruction(right)
+        this.pushInstruction({
+          opcode: Opcode.BITWISE_OR,
+          args: []
+        })
+        break
+      case '^':
+        left = this.translateExpression(node.left)
+        right = this.translateExpression(node.right)
+        this.appendPushInstruction(left)
+        this.appendPushInstruction(right)
+        this.pushInstruction({
+          opcode: Opcode.BITWISE_XOR,
+          args: []
+        })
+        break
+      case '<<':
+        left = this.translateExpression(node.left)
+        right = this.translateExpression(node.right)
+        this.appendPushInstruction(left)
+        this.appendPushInstruction(right)
+        this.pushInstruction({
+          opcode: Opcode.BITWISE_LEFT_SHIFT,
+          args: []
+        })
+        break
+      case '>>':
+        left = this.translateExpression(node.left)
+        right = this.translateExpression(node.right)
+        this.appendPushInstruction(left)
+        this.appendPushInstruction(right)
+        this.pushInstruction({
+          opcode: Opcode.BITWISE_RIGHT_SHIFT,
+          args: []
+        })
+        break
+      case '**':
+        this.appendPushInstruction(
+          this.translateExpression(
+            babel.types.callExpression(
+              babel.types.memberExpression(
+                babel.types.identifier('Math'),
+                babel.types.identifier('pow')
+              ),
+              [node.left, node.right]
+            )
+          )
+        )
+        break
+      default:
+        throw 'UNHANDLED_OPERATOR_BINARY_EXPRESSION'
+    }
+  }
+
+  private translateLogicalExpression(node: babel.types.LogicalExpression) {
+    const left = this.translateExpression(node.left)
+    const right = this.translateExpression(node.right)
+
+    switch (node.operator) {
+      case '&&':
+        this.appendPushInstruction(left)
+        this.appendPushInstruction(right)
+        this.pushInstruction({
+          opcode: Opcode.AND,
+          args: []
+        })
+        break
+      case '||':
+        this.appendPushInstruction(left)
+        this.appendPushInstruction(right)
+        this.pushInstruction({
+          opcode: Opcode.OR,
           args: []
         })
         break
@@ -513,6 +698,8 @@ export default class Compiler {
         // 依赖命中
         if (this.isADependency(node.object.name)) {
           this.appendPushInstruction(this.createDependencyArgument(this.getDependencyPointer(node.object.name)))
+        } else if (this.isADependencyUnderWindow(node.object.name)) {
+          this.appendPushInstruction(this.translateDependencyExpressionUnderWindow(node.object))
         } else {
           console.error(node.object.name)
           throw 'BASE_NOT_DEPENDENCY'
@@ -522,6 +709,11 @@ export default class Compiler {
 
       case 'CallExpression':
         this.pushCallExpressionOntoStack(node.object)
+        break
+
+      case 'MemberExpression':
+        this.pushMemberExpressionOntoStack(node.object)
+        this.appendGetPropertyInstruction()
         break
 
       default:
@@ -548,7 +740,7 @@ export default class Compiler {
     const argumentsArrayToCall = this.declareArrVariable()
 
     args.forEach(argument => {
-      const initializedArrPointer = this.declareArrVariableWithValue(argument)
+      const argumentArr = this.declareArrVariableWithValue(argument)
 
       // pushes a reference onto stack
       this.appendPushInstruction(this.createArrayArgument())
@@ -557,7 +749,7 @@ export default class Compiler {
       this.appendGetPropertyInstruction()
 
       this.appendPushInstruction(this.createVariableArgument(argumentsArrayToCall))
-      this.appendPushInstruction(this.createVariableArgument(initializedArrPointer))
+      this.appendPushInstruction(this.createVariableArgument(argumentArr))
 
       this.appendApplyInstruction()
     })
@@ -570,15 +762,17 @@ export default class Compiler {
     switch (node.callee.type) {
       case 'MemberExpression':
         this.pushMemberExpressionOntoStack(node.callee)
-
+        this.appendGetPropertyInstruction()
+        this.appendPushInstruction(this.createUndefinedArgument())
         this.appendPushInstruction(this.createVariableArgument(targetOfCallArguments))
-        this.appendCallMemberExpression()
+        this.appendApplyInstruction()
         break
 
       case 'Identifier':
         this.appendPushInstruction(this.translateExpression(node.callee))
+        this.appendPushInstruction(this.createUndefinedArgument())
         this.appendPushInstruction(this.createVariableArgument(targetOfCallArguments))
-        this.appendCallInstruction()
+        this.appendApplyInstruction()
         break
 
       default:
@@ -586,7 +780,7 @@ export default class Compiler {
         throw 'UNHANDLED_CALL_EXPRESSION_TYPE'
     }
     // remove reference? not sure what is occupying the stack
-    this.appendPopInstruction(this.createUndefinedArgument())
+    // this.appendPopInstruction(this.createUndefinedArgument())
   }
 
   private makeNewBlock(): Block {
@@ -719,18 +913,36 @@ export default class Compiler {
     if (node.id.type !== 'Identifier') {
       throw 'FUNCTION_DECLARATION_ID_TYPE'
     }
+    const stub = this.makeStub(StubType.FUNCTION_START)
+    this.functionTable.set(node.id.name, stub)
+    this.appendStubInstruction(this.createAddrStubArgument(stub))
 
     this.context.push()
 
-    this.globalFunctions.add(node.id.name)
+    this.appendStubInstruction(this.createAddrStubArgument(stub))
+
     this.buildIR(node.body.body)
 
+    this.appendPopStackFrameInstruction()
     this.context.pop()
   }
 
-  private buildIR(statements: babel.types.Statement[]) {
+  private buildIR(statements: babel.types.Statement[], isMain = false) {
+    const oepStub: Stub = {index: -1, type: StubType.OEP}
+    let oepSet = false
+
+    if (isMain) {
+      this.appendPushInstruction(this.createAddrStubArgument(oepStub))
+      this.appendJmpInstruction()
+    }
+
     statements.forEach(statement => {
       let stub: Stub = undefined
+
+      if (isMain && !oepSet && statement.type !== 'FunctionDeclaration') {
+        this.appendStubInstruction(this.createAddrStubArgument(oepStub))
+        oepSet = true
+      }
 
       switch (statement.type) {
         case 'IfStatement':
@@ -752,7 +964,16 @@ export default class Compiler {
         case 'ExpressionStatement':
           switch (statement.expression.type) {
             case 'CallExpression':
-              this.pushCallExpressionOntoStack(statement.expression)
+              if (statement.expression.callee.type === 'Identifier' && this.isAFunction(statement.expression.callee.name)) {
+                const stub = this.functionTable.get(statement.expression.callee.name)
+                if (stub === undefined) throw 'FUNCTION_STUB_NOT_FOUND'
+                this.appendPushStackFrameInstruction()
+                this.appendPushInstruction(this.createAddrStubArgument(stub))
+                this.appendJmpInstruction()
+                // The above code must satisfy opcode length = 10
+              } else {
+                this.pushCallExpressionOntoStack(statement.expression)
+              }
               // Pop the return data of the calling from stack since it is not received.
               this.appendPopInstruction(this.createUndefinedArgument())
               break
@@ -808,7 +1029,7 @@ export default class Compiler {
   }
 
   compile() {
-    this.buildIR(this.ast.program.body)
+    this.buildIR(this.ast.program.body, true)
     return this.ir
   }
 }
