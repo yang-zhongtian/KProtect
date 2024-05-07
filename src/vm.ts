@@ -1,64 +1,44 @@
-import {Header, Opcode} from './constant'
-import {inflateRaw} from 'pako'
+import { Header, Opcode } from './constant'
+import { unzlibSync } from 'fflate'
 
-class Stack<T> {
-    private stack: T[]
+class VMStack {
+    private stack: any[][] = [[]]
 
-    constructor() {
-        this.stack = []
+    push(value: any) {
+        if (this.stack.length === 0) throw 'STACK_UNDERFLOW'
+        this.stack[this.stack.length - 1].push(value)
     }
 
-    push(element: T): void {
-        this.stack.push(element)
+    pop() {
+        if (this.stack.length === 0) throw 'STACK_UNDERFLOW'
+        return this.stack[this.stack.length - 1].pop()
     }
 
-    pop(): T | undefined {
-        return this.stack.pop()
-    }
-
-    top(): T | undefined {
-        return this.stack.at(-1)
-    }
-
-    isEmpty(): boolean {
-        return this.stack.length === 0
-    }
-
-    size(): number {
-        return this.stack.length
-    }
 }
 
 export default class VM {
     private readonly bytecode: Uint8Array
     private readonly strings: string[]
     private readonly dependencies = [window, console]
-    private readonly lookUpTable: { [index: string]: number }
-    private readonly opcodeHandlers: Function[]
-    private readonly stack: Stack<any>
-    private readonly tracebackStack: Stack<Function>
-    private readonly blockLabelStack: Stack<string>
+    private readonly vmStack: VMStack
+    // private readonly tracebackStack: Stack<Function>
     private readonly localVariables: any[]
     private programCounter: number
 
-    constructor(bytecode: string, strings: string[], lookUpTable: { [index: string]: number }) {
+    constructor(bytecode: string, strings: string[]) {
         this.bytecode = this.decodeBytecode(bytecode)
 
         this.strings = strings
-        this.opcodeHandlers = []
-        this.stack = new Stack()
+        this.vmStack = new VMStack()
         this.localVariables = []
-        this.lookUpTable = lookUpTable
 
-        this.tracebackStack = new Stack()
-        this.tracebackStack.push(() => {
-            // if we call this function from main context then we just exit
-            this.programCounter = this.bytecode.length + 1
-            // this.programCounter = +inf
-        })
-        this.blockLabelStack = new Stack()
+        // this.tracebackStack = new Stack()
+        // this.tracebackStack.push(() => {
+        //     // if we call this function from main context then we just exit
+        //     this.programCounter = this.bytecode.length + 1
+        //     // this.programCounter = +inf
+        // })
         this.programCounter = 0
-        this.initOpcodeHandlers()
     }
 
     private decodeBytecode(bytecode: string): Uint8Array {
@@ -72,7 +52,7 @@ export default class VM {
         for (let i = 0; i < decoded.length; i++) {
             intArr[i] = decoded.charCodeAt(i)
         }
-        return inflateRaw(intArr)
+        return unzlibSync(intArr)
     }
 
     private byteArrayToLong(byteArray: Uint8Array): number {
@@ -103,7 +83,7 @@ export default class VM {
                 return this.byteArrayToLong(this.load8ByteArray())
 
             case Header.POP_STACK:
-                return this.stack.pop()
+                return this.vmStack.pop()
 
             case Header.FETCH_VARIABLE:
                 const variable = this.bytecode[this.programCounter++]
@@ -125,255 +105,180 @@ export default class VM {
         }
     }
 
-    private jmpToBlock(label: string, traceback: number | undefined) {
-        const location = this.lookUpTable[label]
+    private jmpToBlock(location: number) {
         if (location === undefined) throw 'ILLEGAL_JMP'
-        if (traceback !== undefined) {
-            this.tracebackStack.push(() => {
-                this.programCounter = traceback
-            })
-        }
-        this.blockLabelStack.push(label)
         this.programCounter = location
     }
 
-    private initOpcodeHandlers() {
-        this.opcodeHandlers[Opcode.ADD] = () => {
-            // in int array
-            const arg$2 = this.stack.pop()
-            const arg$1 = this.stack.pop()
-
-            this.stack.push(arg$1 + arg$2)
+    private executeOpcode(opcode: Opcode) {
+        let arg$1, arg$2, arg$3
+        switch (opcode) {
+            case Opcode.ADD:
+                arg$2 = this.vmStack.pop()
+                arg$1 = this.vmStack.pop()
+                this.vmStack.push(arg$1 + arg$2)
+                break
+            case Opcode.SUB:
+                arg$2 = this.vmStack.pop()
+                arg$1 = this.vmStack.pop()
+                this.vmStack.push(arg$1 - arg$2)
+                break
+            case Opcode.MUL:
+                arg$2 = this.vmStack.pop()
+                arg$1 = this.vmStack.pop()
+                this.vmStack.push(arg$1 * arg$2)
+                break
+            case Opcode.DIV:
+                arg$2 = this.vmStack.pop()
+                arg$1 = this.vmStack.pop()
+                this.vmStack.push(arg$1 / arg$2)
+                break
+            case Opcode.MOD:
+                arg$2 = this.vmStack.pop()
+                arg$1 = this.vmStack.pop()
+                this.vmStack.push(arg$1 % arg$2)
+                break
+            case Opcode.NEG:
+                arg$1 = this.vmStack.pop()
+                this.vmStack.push(!arg$1)
+                break
+            case Opcode.STORE:
+                arg$1 = this.getValue()
+                this.localVariables[arg$1] = this.getValue()
+                break
+            case Opcode.GET_PROPERTY:
+                arg$2 = this.vmStack.pop()
+                arg$1 = this.vmStack.pop()
+                this.vmStack.push(arg$1[arg$2])
+                break
+            case Opcode.SET_PROPERTY:
+                throw 'UNFINISHED'
+            case Opcode.EXISTS:
+                throw 'UNFINISHED'
+            case Opcode.DELETE_PROPERTY:
+                throw 'UNFINISHED'
+            case Opcode.IN:
+                throw 'UNFINISHED'
+            case Opcode.INSTANCE_OF:
+                throw 'UNFINISHED'
+            case Opcode.TYPEOF:
+                arg$1 = this.vmStack.pop()
+                this.vmStack.push(typeof arg$1)
+                break
+            case Opcode.CALL:
+                arg$2 = this.vmStack.pop()
+                arg$1 = this.vmStack.pop()
+                this.vmStack.push(arg$1(...arg$2))
+                break
+            case Opcode.EQUAL:
+                arg$2 = this.vmStack.pop()
+                arg$1 = this.vmStack.pop()
+                // noinspection EqualityComparisonWithCoercionJS
+                this.vmStack.push(arg$1 == arg$2)
+                break
+            case Opcode.NOT_EQUAL:
+                arg$2 = this.vmStack.pop()
+                arg$1 = this.vmStack.pop()
+                // noinspection EqualityComparisonWithCoercionJS
+                this.vmStack.push(arg$1 != arg$2)
+                break
+            case Opcode.LESS_THAN:
+                arg$2 = this.vmStack.pop()
+                arg$1 = this.vmStack.pop()
+                this.vmStack.push(arg$1 < arg$2)
+                break
+            case Opcode.LESS_THAN_EQUAL:
+                arg$2 = this.vmStack.pop()
+                arg$1 = this.vmStack.pop()
+                this.vmStack.push(arg$1 <= arg$2)
+                break
+            case Opcode.STRICT_EQUAL:
+                arg$2 = this.vmStack.pop()
+                arg$1 = this.vmStack.pop()
+                this.vmStack.push(arg$1 === arg$2)
+                break
+            case Opcode.STRICT_NOT_EQUAL:
+                arg$2 = this.vmStack.pop()
+                arg$1 = this.vmStack.pop()
+                this.vmStack.push(arg$1 !== arg$2)
+                break
+            case Opcode.GREATER_THAN:
+                arg$2 = this.vmStack.pop()
+                arg$1 = this.vmStack.pop()
+                this.vmStack.push(arg$1 > arg$2)
+                break
+            case Opcode.GREATER_THAN_EQUAL:
+                arg$2 = this.vmStack.pop()
+                arg$1 = this.vmStack.pop()
+                this.vmStack.push(arg$1 >= arg$2)
+                break
+            case Opcode.JMP:
+                arg$1 = this.vmStack.pop()
+                this.jmpToBlock(arg$1)
+                break
+            case Opcode.JZ:
+                arg$2 = this.vmStack.pop()
+                arg$1 = this.vmStack.pop()
+                if (!arg$1) this.jmpToBlock(arg$2)
+                break
+            case Opcode.AND:
+                arg$2 = this.vmStack.pop()
+                arg$1 = this.vmStack.pop()
+                this.vmStack.push(arg$1 && arg$2)
+                break
+            case Opcode.OR:
+                throw 'UNFINISHED'
+            case Opcode.BITWISE_AND:
+                throw 'UNFINISHED'
+            case Opcode.BITWISE_OR:
+                throw 'UNFINISHED'
+            case Opcode.BITWISE_XOR:
+                throw 'UNFINISHED'
+            case Opcode.BITWISE_LEFT_SHIFT:
+                throw 'UNFINISHED'
+            case Opcode.BITWISE_RIGHT_SHIFT:
+                throw 'UNFINISHED'
+            case Opcode.BITWISE_UNSIGNED_RIGHT_SHIFT:
+                throw 'UNFINISHED'
+            case Opcode.PUSH:
+                this.vmStack.push(this.getValue())
+                break
+            case Opcode.POP:
+                arg$1 = this.getValue()
+                arg$2 = this.vmStack.pop()
+                if (arg$1 !== undefined) this.localVariables[arg$1] = arg$2
+                break
+            case Opcode.INIT_CONSTRUCTOR:
+                arg$2 = this.vmStack.pop()
+                arg$1 = this.vmStack.pop()
+                this.vmStack.push(new arg$1(arg$2))
+                break
+            case Opcode.INIT_ARRAY:
+                arg$1 = this.vmStack.pop()
+                this.vmStack.push([arg$1])
+                break
+            case Opcode.VOID:
+                throw 'UNFINISHED'
+            case Opcode.THROW:
+                throw 'UNFINISHED'
+            case Opcode.DELETE:
+                throw 'UNFINISHED'
+            case Opcode.APPLY:
+                arg$3 = this.vmStack.pop()
+                arg$2 = this.vmStack.pop()
+                arg$1 = this.vmStack.pop()
+                this.vmStack.push(arg$1.apply(arg$2, arg$3))
+                break
+            case Opcode.CALL_MEMBER_EXPRESSION:
+                arg$3 = this.vmStack.pop()
+                arg$2 = this.vmStack.pop()
+                arg$1 = this.vmStack.pop()
+                this.vmStack.push(arg$1[arg$2](...arg$3))
+                break
+            default:
+                console.warn(opcode, this.programCounter)
+                throw 'UNKNOWN_OPCODE'
         }
-        this.opcodeHandlers[Opcode.SUB] = () => {
-            const arg$2 = this.stack.pop()
-            const arg$1 = this.stack.pop()
-
-            this.stack.push(arg$1 - arg$2)
-        }
-        this.opcodeHandlers[Opcode.MUL] = () => {
-            const arg$2 = this.stack.pop()
-            const arg$1 = this.stack.pop()
-
-            this.stack.push(arg$1 * arg$2)
-        }
-        this.opcodeHandlers[Opcode.DIV] = () => {
-            const arg$2 = this.stack.pop()
-            const arg$1 = this.stack.pop()
-
-            this.stack.push(arg$1 / arg$2)
-        }
-        this.opcodeHandlers[Opcode.MOD] = () => {
-            const arg$2 = this.stack.pop()
-            const arg$1 = this.stack.pop()
-
-            this.stack.push(arg$1 % arg$2)
-        }
-        this.opcodeHandlers[Opcode.NEG] = () => {
-            const arg$1 = this.stack.pop()
-
-            this.stack.push(!arg$1)
-        }
-        this.opcodeHandlers[Opcode.STORE] = () => {
-            const dst = this.getValue()
-
-            this.localVariables[dst] = this.getValue()
-        }
-        this.opcodeHandlers[Opcode.GET_PROPERTY] = () => {
-            const property = this.stack.pop()
-            const base = this.stack.pop()
-
-            this.stack.push(base[property])
-        }
-        this.opcodeHandlers[Opcode.SET_PROPERTY] = () => {
-            throw 'UNFINISHED'
-        }
-        this.opcodeHandlers[Opcode.EXISTS] = () => {
-            throw 'UNFINISHED'
-        }
-        this.opcodeHandlers[Opcode.DELETE_PROPERTY] = () => {
-            throw 'UNFINISHED'
-        }
-        this.opcodeHandlers[Opcode.IN] = () => {
-            throw 'UNFINISHED'
-        }
-        this.opcodeHandlers[Opcode.INSTANCE_OF] = () => {
-            throw 'UNFINISHED'
-        }
-        this.opcodeHandlers[Opcode.TYPEOF] = () => {
-            const expression = this.stack.pop()
-
-            this.stack.push(typeof expression)
-        }
-        this.opcodeHandlers[Opcode.CALL] = () => {
-            const argArr = this.stack.pop()
-            const fn = this.stack.pop()
-
-            this.stack.push(fn(...argArr))
-        }
-        this.opcodeHandlers[Opcode.EQUAL] = () => {
-            const arg$2 = this.stack.pop()
-            const arg$1 = this.stack.pop()
-
-            // noinspection EqualityComparisonWithCoercionJS
-            this.stack.push(arg$1 == arg$2)
-        }
-        this.opcodeHandlers[Opcode.NOT_EQUAL] = () => {
-            const arg$2 = this.stack.pop()
-            const arg$1 = this.stack.pop()
-
-            // noinspection EqualityComparisonWithCoercionJS
-            this.stack.push(arg$1 != arg$2)
-        }
-        this.opcodeHandlers[Opcode.LESS_THAN] = () => {
-            const arg$2 = this.stack.pop()
-            const arg$1 = this.stack.pop()
-
-            this.stack.push(arg$1 < arg$2)
-        }
-        this.opcodeHandlers[Opcode.LESS_THAN_EQUAL] = () => {
-            const arg$2 = this.stack.pop()
-            const arg$1 = this.stack.pop()
-
-            this.stack.push(arg$1 <= arg$2)
-        }
-        this.opcodeHandlers[Opcode.STRICT_EQUAL] = () => {
-            const arg$2 = this.stack.pop()
-            const arg$1 = this.stack.pop()
-
-            this.stack.push(arg$1 === arg$2)
-        }
-        this.opcodeHandlers[Opcode.STRICT_NOT_EQUAL] = () => {
-            const arg$2 = this.stack.pop()
-            const arg$1 = this.stack.pop()
-
-            this.stack.push(arg$1 !== arg$2)
-        }
-        this.opcodeHandlers[Opcode.GREATER_THAN] = () => {
-            const arg$2 = this.stack.pop()
-            const arg$1 = this.stack.pop()
-
-            this.stack.push(arg$1 > arg$2)
-        }
-        this.opcodeHandlers[Opcode.GREATER_THAN_EQUAL] = () => {
-            const arg$2 = this.stack.pop()
-            const arg$1 = this.stack.pop()
-
-            this.stack.push(arg$1 >= arg$2)
-        }
-        this.opcodeHandlers[Opcode.JMP] = () => {
-            const label = this.stack.pop()
-
-            this.jmpToBlock(label, this.programCounter)
-        }
-        this.opcodeHandlers[Opcode.JMP_IF_ELSE] = () => {
-            const label$2 = this.stack.pop()
-            const label$1 = this.stack.pop()
-            const expression = this.stack.pop()
-
-            if (expression) {
-                this.jmpToBlock(label$1, this.programCounter)
-            } else if (label$2 !== undefined) {
-                this.jmpToBlock(label$2, this.programCounter)
-            }
-        }
-        this.opcodeHandlers[Opcode.JMP_NO_TRACEBACK] = () => {
-            const label = this.stack.pop()
-
-            this.jmpToBlock(label, undefined)
-        }
-        this.opcodeHandlers[Opcode.LOOP] = () => {
-            const label = this.blockLabelStack.top()
-            if (!label) throw 'LOOP_LABEL_NOT_FOUND'
-
-            this.jmpToBlock(label, undefined)
-        }
-        this.opcodeHandlers[Opcode.AND] = () => {
-            const arg$2 = this.stack.pop()
-            const arg$1 = this.stack.pop()
-
-            this.stack.push(arg$1 && arg$2)
-        }
-        this.opcodeHandlers[Opcode.OR] = () => {
-            throw 'UNFINISHED'
-        }
-        this.opcodeHandlers[Opcode.BITWISE_AND] = () => {
-            throw 'UNFINISHED'
-        }
-        this.opcodeHandlers[Opcode.BITWISE_OR] = () => {
-            throw 'UNFINISHED'
-        }
-        this.opcodeHandlers[Opcode.BITWISE_XOR] = () => {
-            throw 'UNFINISHED'
-        }
-        this.opcodeHandlers[Opcode.BITWISE_LEFT_SHIFT] = () => {
-            throw 'UNFINISHED'
-        }
-        this.opcodeHandlers[Opcode.BITWISE_RIGHT_SHIFT] = () => {
-            throw 'UNFINISHED'
-        }
-        this.opcodeHandlers[Opcode.BITWISE_UNSIGNED_RIGHT_SHIFT] = () => {
-            throw 'UNFINISHED'
-        }
-        this.opcodeHandlers[Opcode.PUSH] = () => {
-            this.stack.push(this.getValue())
-        }
-        this.opcodeHandlers[Opcode.POP] = () => {
-            const dst = this.getValue()
-            const data = this.stack.pop()
-
-            if (dst !== undefined) {
-                this.localVariables[dst] = data
-            }
-        }
-        this.opcodeHandlers[Opcode.INIT_CONSTRUCTOR] = () => {
-            const val = this.stack.pop()
-            const c = this.stack.pop()
-
-            this.stack.push(new c(val))
-        }
-        this.opcodeHandlers[Opcode.INIT_ARRAY] = () => {
-            const v = this.stack.pop()
-
-            this.stack.push([v])
-        }
-        this.opcodeHandlers[Opcode.EXIT] = () => {
-            const func = this.tracebackStack.pop()
-            if (func === undefined) throw 'EMPTY_TRACEBACK'
-            func()
-        }
-        this.opcodeHandlers[Opcode.EXIT_IF] = () => {
-            const expression = this.stack.pop()
-            if (expression) {
-                this.opcodeHandlers[Opcode.EXIT]()
-            }
-        }
-        this.opcodeHandlers[Opcode.VOID] = () => {
-            throw 'UNFINISHED'
-        }
-        this.opcodeHandlers[Opcode.THROW] = () => {
-            throw 'UNFINISHED'
-        }
-        this.opcodeHandlers[Opcode.DELETE] = () => {
-            throw 'UNFINISHED'
-        }
-
-        this.opcodeHandlers[Opcode.APPLY] = () => {
-            const args = this.stack.pop()
-            const obj = this.stack.pop()
-            const fn = this.stack.pop()
-
-            this.stack.push(fn.apply(obj, args))
-        }
-
-        this.opcodeHandlers[Opcode.CALL_MEMBER_EXPRESSION] = () => {
-            const args = this.stack.pop()
-            const property = this.stack.pop()
-            const obj = this.stack.pop()
-
-            this.stack.push(obj[property](...args))
-        }
-
     }
 
     start() {
@@ -383,15 +288,7 @@ export default class VM {
             const opcode = this.bytecode[count]
             // console.warn(`EXECUTING: ${opcode}`)
             // console.log(JSON.stringify(this.stack))
-            const handler = this.opcodeHandlers[opcode]
-
-            if (handler === undefined) {
-                // console.log(this.decodedBytecode.slice(count-45, count+1))
-                // console.log(opcode, count)
-                throw 'UNKNOWN_OPCODE'
-            }
-            // console.log(this.programCounter)
-            handler()
+            this.executeOpcode(opcode)
         }
     }
 }

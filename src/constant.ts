@@ -1,5 +1,5 @@
 export const enum Header {
-    LOAD_STRING,
+    LOAD_STRING = 100,
     LOAD_NUMBER,
     POP_STACK,
     FETCH_VARIABLE,
@@ -7,6 +7,7 @@ export const enum Header {
     LOAD_UNDEFINED,
     LOAD_ARRAY,
     LOAD_OBJECT,
+    DYN_ADDR,
 }
 
 export const enum Opcode {
@@ -34,9 +35,8 @@ export const enum Opcode {
     GREATER_THAN,
     GREATER_THAN_EQUAL,
     JMP,
-    JMP_IF_ELSE,
-    JMP_NO_TRACEBACK,
-    LOOP,
+    JZ,
+    ADDR_STUB,
     AND,
     OR,
     BITWISE_AND,
@@ -49,11 +49,11 @@ export const enum Opcode {
     POP,
     INIT_CONSTRUCTOR,
     INIT_ARRAY,
-    EXIT,
-    EXIT_IF,
     VOID,
     THROW,
     DELETE,
     APPLY,
     CALL_MEMBER_EXPRESSION,
+    PUSH_STACK_FRAME,
+    POP_STACK_FRAME,
 }

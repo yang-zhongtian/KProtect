@@ -1,29 +1,26 @@
-import {Block, InstructionArgument, IntermediateLanguage} from './compiler'
-import {Header, Opcode} from './constant'
-import {deflateRaw} from 'pako'
-
-const OPCODE_WITH_DATA_FROM_STACK = [Opcode.JMP, Opcode.JMP_IF_ELSE, Opcode.JMP_NO_TRACEBACK]
+import { Block, InstructionArgument } from './compiler'
+import { Header, Opcode } from './constant'
+import { zlibSync } from 'fflate';
 
 export interface VirtualMachineArguments {
     bytecode: number[]
     strings: string[]
-    lookUpTable: LookUpTable
 }
 
 export interface LookUpTable {
-    [Label: string]: number;
+    [Label: number]: number;
 }
 
 export default class BytecodeCompiler {
-    private readonly il: IntermediateLanguage
+    private readonly ir: Block
     private readonly strings: string[]
     bytecode: Uint8Array
     lookUpTable: LookUpTable
 
-    constructor(ir: IntermediateLanguage) {
-        this.il = ir
+    constructor(ir: Block) {
+        this.ir = ir
         this.strings = []
-        this.bytecode = new Uint8Array()
+        this.bytecode = undefined
         this.lookUpTable = {}
     }
 
@@ -37,7 +34,7 @@ export default class BytecodeCompiler {
         return byteArray
     }
 
-    private compileInstructionArgument(arg: InstructionArgument): Header[] {
+    private compileInstructionArgument(arg: InstructionArgument): number[] {
         const header = arg.type
         switch (header) {
             case Header.LOAD_UNDEFINED:
@@ -47,8 +44,13 @@ export default class BytecodeCompiler {
             case Header.LOAD_ARRAY:
                 return [header]
             case Header.LOAD_STRING:
-                this.strings.push(arg.value)
-                const stringPointer = this.longToByteArray(this.strings.length - 1)
+                let stringPointer
+                if (!this.strings.includes(arg.value)) {
+                    this.strings.push(arg.value)
+                    stringPointer = this.longToByteArray(this.strings.length - 1)
+                } else {
+                    stringPointer = this.longToByteArray(this.strings.indexOf(arg.value))
+                }
                 return [header, ...stringPointer]
             case Header.LOAD_NUMBER:
                 return [header, ...this.longToByteArray(arg.value)]
@@ -58,6 +60,8 @@ export default class BytecodeCompiler {
                 return [header, arg.value]
             case Header.FETCH_DEPENDENCY:
                 return [header, arg.value]
+            case Header.DYN_ADDR:
+                return [header, arg.value, ...new Array<number>(7).fill(0)]
         }
     }
 
@@ -66,40 +70,48 @@ export default class BytecodeCompiler {
             const opcode = instruction.opcode
             if (opcode === undefined) throw 'UNHANDLED_OPCODE'
 
-            if (OPCODE_WITH_DATA_FROM_STACK.includes(opcode)) {
-                instruction.args.forEach(command => {
-                    bytes.push(Opcode.PUSH)
-                    bytes.push(...this.compileInstructionArgument(command))
-                })
-                bytes.push(opcode)
-            } else {
-                bytes.push(opcode)
-                instruction.args.forEach(command => {
-                    bytes.push(...this.compileInstructionArgument(command))
-                })
+            if (opcode === Opcode.ADDR_STUB) {
+                if (instruction.args[0].type !== Header.DYN_ADDR) throw 'UNEXPECTED_HEADER'
+                this.lookUpTable[instruction.args[0].value] = bytes.length
+                return
             }
+
+            // if (OPCODE_WITH_DATA_FROM_STACK.includes(opcode)) {
+            //     instruction.args.forEach(command => {
+            //         bytes.push(Opcode.PUSH)
+            //         bytes.push(...this.compileInstructionArgument(command))
+            //     })
+            //     bytes.push(opcode)
+            // } else {
+
+            bytes.push(opcode)
+            instruction.args.forEach(command => {
+                const compiledInstruction = this.compileInstructionArgument(command)
+                bytes.push(...compiledInstruction)
+            })
+            // }
         })
     }
 
-    compile(): { bytecode: string; strings: string[]; lookUpTable: LookUpTable } {
+    compile(): { bytecode: string; strings: string[] } {
         const bytes: number[] = []
-
-        for (const [label, block] of Object.entries(this.il)) {
-            console.log(`Segment ${label}: ${bytes.length}`)
-
-            this.lookUpTable[label] = bytes.length
-
-            this.compileBlock(block, bytes)
+        this.compileBlock(this.ir, bytes)
+        for (let index = 0; index < bytes.length; index++) {
+            if (bytes[index] === Header.DYN_ADDR) {
+                let addr = this.lookUpTable[bytes[index + 1]]
+                if (addr === undefined) throw 'DYNAMIC_ADDRESS_NOT_FOUND'
+                bytes[index] = Header.LOAD_NUMBER
+                bytes.splice(index + 1, 8, ...this.longToByteArray(addr))
+            }
         }
 
         this.bytecode = Uint8Array.from(bytes)
-
-        const buffer: Uint8Array = deflateRaw(this.bytecode)
+        // console.dir(JSON.stringify(bytes))
+        const buffer: Uint8Array = zlibSync(this.bytecode)
 
         return {
             bytecode: Buffer.from(buffer).toString('base64'),
-            strings: this.strings,
-            lookUpTable: this.lookUpTable
+            strings: this.strings
         }
     }
 

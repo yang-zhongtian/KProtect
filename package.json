@@ -5,8 +5,11 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "build": "node cleanup.js && tsc && rollup --config",
-    "protect": "tsc && node build/protect.js"
+    "build": "npm run build:compiler && npm run build:vm",
+    "build:vm": "rollup --config",
+    "build:compiler": "tsc",
+    "protect": "node build/protect.js",
+    "test": "tsc && npm run protect"
   },
   "author": "Richard Yang",
   "license": "GPL-3.0-or-later",
@@ -22,10 +25,12 @@
     "@rollup/plugin-json": "^6.0.0",
     "@rollup/plugin-node-resolve": "^15.0.1",
     "@rollup/plugin-terser": "^0.3.0",
+    "@rollup/plugin-typescript": "^11.1.2",
     "@types/babel__core": "^7.1.20",
     "@types/node": "^18.11.18",
-    "@types/pako": "^2.0.0",
-    "pako": "^2.1.0",
-    "rollup": "^3.9.1"
+    "fflate": "^0.8.0",
+    "rollup": "^3.9.1",
+    "tslib": "^2.6.0",
+    "typescript": "^5.1.6"
   }
 }
