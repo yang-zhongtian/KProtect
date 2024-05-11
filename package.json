@@ -1,36 +1,26 @@
 {
-  "name": "k-protect",
+  "name": "kprotect",
   "version": "1.0.0",
   "description": "Kernel Protect",
-  "main": "index.js",
-  "type": "module",
   "scripts": {
     "build": "npm run build:compiler && npm run build:vm",
-    "build:vm": "rollup --config",
-    "build:compiler": "tsc",
-    "protect": "node build/protect.js",
+    "build:vm": "yarn workspace @kprotect/vm build",
+    "build:compiler": "yarn workspace @kprotect/compiler build",
+    "build:debugger": "yarn workspace @kprotect/debugger build",
+    "protect": "node cli/protect.cjs",
     "test": "tsc && npm run protect"
   },
   "author": "Richard Yang",
   "license": "GPL-3.0-or-later",
+  "type": "module",
+  "private": true,
   "repository": {
     "type": "git",
     "url": "https://github.com/yang-zhongtian/KProtect.git"
   },
-  "devDependencies": {
-    "@babel/core": "^7.20.12",
-    "@babel/preset-env": "^7.20.2",
-    "@rollup/plugin-babel": "^6.0.3",
-    "@rollup/plugin-commonjs": "^24.0.0",
-    "@rollup/plugin-json": "^6.0.0",
-    "@rollup/plugin-node-resolve": "^15.0.1",
-    "@rollup/plugin-terser": "^0.3.0",
-    "@rollup/plugin-typescript": "^11.1.2",
-    "@types/babel__core": "^7.1.20",
-    "@types/node": "^18.11.18",
-    "fflate": "^0.8.0",
-    "rollup": "^3.9.1",
-    "tslib": "^2.6.0",
-    "typescript": "^5.1.6"
+  "workspaces": {
+    "packages": [
+      "packages/*"
+    ]
   }
 }

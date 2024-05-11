@@ -1,0 +1,26 @@
+{
+  "name": "@kprotect/vm",
+  "version": "1.0.0",
+  "license": "GPL-3.0",
+  "scripts": {
+    "build": "rollup --config rollup.config.js"
+  },
+  "type": "module",
+  "devDependencies": {
+    "@babel/core": "^7.24.5",
+    "@babel/preset-env": "^7.20.2",
+    "@rollup/plugin-babel": "^6.0.4",
+    "@rollup/plugin-commonjs": "^25.0.7",
+    "@rollup/plugin-node-resolve": "^15.2.3",
+    "@rollup/plugin-terser": "^0.4.4",
+    "@rollup/plugin-typescript": "^11.1.6",
+    "@types/babel__core": "^7.1.20",
+    "@types/node": "^20.12.11",
+    "fflate": "^0.8.2",
+    "tslib": "^2.6.2",
+    "typescript": "^5.4.5"
+  },
+  "dependencies": {
+    "js-base64": "^3.7.7"
+  }
+}

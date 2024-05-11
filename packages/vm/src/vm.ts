@@ -1,5 +1,6 @@
-import { Header, Opcode } from './constant'
+import { Header, Opcode } from '@kprotect/compiler'
 import { unzlibSync } from 'fflate'
+import { toUint8Array } from 'js-base64'
 
 interface Context {
   stack: any[]
@@ -72,17 +73,7 @@ export default class VM {
   }
 
   private decodeBytecode(bytecode: string): Uint8Array {
-    let decoded: string
-    if (typeof window !== 'undefined') {
-      // noinspection JSDeprecatedSymbols
-      decoded = atob(bytecode)
-    } else {
-      decoded = Buffer.from(bytecode, 'base64').toString('ascii')
-    }
-    const intArr = new Uint8Array(decoded.length)
-    for (let i = 0; i < decoded.length; i++) {
-      intArr[i] = decoded.charCodeAt(i)
-    }
+    const intArr = toUint8Array(bytecode)
     return unzlibSync(intArr)
   }
 

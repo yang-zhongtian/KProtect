@@ -978,6 +978,9 @@ export default class Compiler {
               this.appendPopInstruction(this.createUndefinedArgument())
               break
             case 'AssignmentExpression':
+              if (statement.expression.left.type === 'OptionalMemberExpression') {
+                throw 'OPTIONAL_MEMBER_EXPRESSION_NOT_SUPPORTED'
+              }
               this.translateVariableAssignment(statement.expression.left, statement.expression.right)
               break
             case 'UpdateExpression':
