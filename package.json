@@ -3,12 +3,13 @@
   "version": "1.0.0",
   "description": "Kernel Protect",
   "scripts": {
-    "build": "npm run build:compiler && npm run build:vm",
+    "build": "npm run build:compiler && npm run build:vm && npm run build:debugger",
     "build:vm": "yarn workspace @kprotect/vm build",
     "build:compiler": "yarn workspace @kprotect/compiler build",
     "build:debugger": "yarn workspace @kprotect/debugger build",
     "protect": "node cli/protect.cjs",
-    "test": "tsc && npm run protect"
+    "test": "npm run protect -- -s protect/src.js -o protect/bundle.json",
+    "unit": "yarn workspace @kprotect/test test"
   },
   "author": "Richard Yang",
   "license": "GPL-3.0-or-later",
@@ -20,7 +21,10 @@
   },
   "workspaces": {
     "packages": [
-      "packages/*"
+      "packages/*",
+      "cli",
+      "test"
     ]
-  }
+  },
+  "packageManager": "yarn@1.22.19"
 }

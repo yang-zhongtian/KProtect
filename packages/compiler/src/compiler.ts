@@ -1,6 +1,7 @@
 import * as babel from '@babel/core'
 import { parse } from '@babel/parser'
 import { Header, Opcode } from './constant.js'
+import chalk from 'chalk'
 
 export interface InstructionArgument {
   type: Header
@@ -83,6 +84,7 @@ export default class Compiler {
   private readonly stubStack: Stub[]
   private stubCounter: number
   private readonly functionTable: Map<string, Stub>
+  private oepSet = false
 
   constructor(source: string) {
     this.ast = this.parse(source)
@@ -146,13 +148,6 @@ export default class Compiler {
     }
   }
 
-  private createArrayArgument(): InstructionArgument {
-    return {
-      type: Header.LOAD_ARRAY,
-      value: null
-    }
-  }
-
   private createUndefinedArgument(): InstructionArgument {
     return {
       type: Header.LOAD_UNDEFINED,
@@ -164,6 +159,13 @@ export default class Compiler {
     return {
       type: Header.FETCH_DEPENDENCY,
       value: pointer
+    }
+  }
+
+  private createParameterArgument(index: number): InstructionArgument {
+    return {
+      type: Header.FETCH_PARAMETER,
+      value: index
     }
   }
 
@@ -197,10 +199,34 @@ export default class Compiler {
 
     switch (node.operator) {
       case 'typeof':
-        this.appendTypeofInstruction()
+        this.pushInstruction({
+          opcode: Opcode.TYPEOF,
+          args: []
+        })
         break
       case '!':
-        this.appendNotInstruction()
+        this.pushInstruction({
+          opcode: Opcode.NOT,
+          args: []
+        })
+        break
+      case '+':
+        this.pushInstruction({
+          opcode: Opcode.POS,
+          args: []
+        })
+        break
+      case '-':
+        this.pushInstruction({
+          opcode: Opcode.NEG,
+          args: []
+        })
+        break
+      case '~':
+        this.pushInstruction({
+          opcode: Opcode.BITWISE_NOT,
+          args: []
+        })
         break
       default:
         console.error(node.operator)
@@ -290,24 +316,14 @@ export default class Compiler {
           this.appendPopInstruction(this.createNumberArgument(target))
           return this.createVariableArgument(target)
         }
+
+      case 'ArrayExpression':
+        return this.createVariableArgument(this.buildArgumentsListVariable(node.elements))
+
       default:
         console.error(node)
         throw 'UNHANDLED_VALUE'
     }
-  }
-
-  private appendNotInstruction() {
-    this.pushInstruction({
-      opcode: Opcode.NEG,
-      args: []
-    })
-  }
-
-  private appendTypeofInstruction() {
-    this.pushInstruction({
-      opcode: Opcode.TYPEOF,
-      args: []
-    })
   }
 
   private appendStoreInstruction(args: InstructionArgument[]) {
@@ -345,10 +361,10 @@ export default class Compiler {
     })
   }
 
-  private appendInitArrayInstruction() {
+  private appendBuildArrayInstruction(arg: InstructionArgument) {
     this.pushInstruction({
-      opcode: Opcode.INIT_ARRAY,
-      args: []
+      opcode: Opcode.BUILD_ARRAY,
+      args: [arg]
     })
   }
 
@@ -387,10 +403,10 @@ export default class Compiler {
     })
   }
 
-  private appendPushStackFrameInstruction() {
+  private appendPushStackFrameInstruction(param: InstructionArgument) {
     this.pushInstruction({
       opcode: Opcode.PUSH_STACK_FRAME,
-      args: []
+      args: [param]
     })
   }
 
@@ -401,22 +417,22 @@ export default class Compiler {
     })
   }
 
-  private declareArrVariable(): number {
-    const target = this.context.incr()
-    this.appendStoreInstruction([
-      this.createNumberArgument(target),
-      this.createArrayArgument()
-    ])
-    return target
-  }
-
-  private declareArrVariableWithValue(argument: babel.types.Expression | babel.types.SpreadElement | babel.types.JSXNamespacedName | babel.types.ArgumentPlaceholder | undefined | null): number {
-    this.appendPushInstruction(this.translateExpression(argument))
-    this.appendInitArrayInstruction()
-    const target = this.context.incr()
-    this.appendPopInstruction(this.createNumberArgument(target))
-    return target
-  }
+  // private declareArrVariable(): number {
+  //   const target = this.context.incr()
+  //   this.appendStoreInstruction([
+  //     this.createNumberArgument(target),
+  //     this.createArrayArgument()
+  //   ])
+  //   return target
+  // }
+  //
+  // private declareArrVariableWithValue(argument: babel.types.Expression | babel.types.SpreadElement | babel.types.JSXNamespacedName | babel.types.ArgumentPlaceholder | undefined | null): number {
+  //   this.appendPushInstruction(this.translateExpression(argument))
+  //   this.appendInitArrayInstruction()
+  //   const target = this.context.incr()
+  //   this.appendPopInstruction(this.createNumberArgument(target))
+  //   return target
+  // }
 
   /**
    * 处理二元运算符
@@ -656,6 +672,16 @@ export default class Compiler {
           )
         )
         break
+      case '>>>':
+        left = this.translateExpression(node.left)
+        right = this.translateExpression(node.right)
+        this.appendPushInstruction(left)
+        this.appendPushInstruction(right)
+        this.pushInstruction({
+          opcode: Opcode.BITWISE_UNSIGNED_RIGHT_SHIFT,
+          args: []
+        })
+        break
       default:
         throw 'UNHANDLED_OPERATOR_BINARY_EXPRESSION'
     }
@@ -698,14 +724,23 @@ export default class Compiler {
         // 依赖命中
         if (this.isADependency(node.object.name)) {
           this.appendPushInstruction(this.createDependencyArgument(this.getDependencyPointer(node.object.name)))
-        } else if (this.isADependencyUnderWindow(node.object.name)) {
-          this.appendPushInstruction(this.translateDependencyExpressionUnderWindow(node.object))
-        } else {
-          console.error(node.object.name)
-          throw 'BASE_NOT_DEPENDENCY'
+          break
         }
-        if (node.property.type !== 'Identifier') throw 'UNSUPPORTED_PROPERTY_TYPE'
-        break
+        if (this.isADependencyUnderWindow(node.object.name)) {
+          this.appendPushInstruction(this.translateDependencyExpressionUnderWindow(node.object))
+          break
+        }
+        if (this.isVariableInitialized(node.object.name)) {
+          const reg = this.context.get(node.object.name)
+          if (reg === undefined) {
+            console.error(node.object.name)
+            throw 'VARIABLE_NOT_FOUND'
+          }
+          this.appendPushInstruction(this.createVariableArgument(reg))
+          break
+        }
+        console.error(node.object.name)
+        throw 'BASE_NOT_DEPENDENCY'
 
       case 'CallExpression':
         this.pushCallExpressionOntoStack(node.object)
@@ -726,49 +761,44 @@ export default class Compiler {
     this.appendPushInstruction(this.createStringArgument(node.property.name))
   }
 
-
-  // We translate call arguments by constructing an array of all elements
-  // 1) Defining a new variable with empty array
-  // 2) EXEC Push this variable reference onto stack
-  // 3) EXEC Push "push" string onto stack
-  // 4) EXEC Get_Property and pushes onto top of stack
-  // 5) EXEC Push "argument"
-  // 6) EXEC Call
-  // returns a pointer to the arguments array
-  private pushCallArgumentsOntoStack(args: Array<babel.types.Expression | babel.types.SpreadElement | babel.types.JSXNamespacedName | babel.types.ArgumentPlaceholder>): number {
-    // define argument array
-    const argumentsArrayToCall = this.declareArrVariable()
-
+  /**
+   * 处理函数调用参数，构建参数列表
+   * @param args 参数列表
+   * @return {number} 返回参数列表的指针
+   */
+  private buildArgumentsListVariable(args: Array<babel.types.Expression | babel.types.SpreadElement | babel.types.JSXNamespacedName | babel.types.ArgumentPlaceholder>): number {
     args.forEach(argument => {
-      const argumentArr = this.declareArrVariableWithValue(argument)
-
-      // pushes a reference onto stack
-      this.appendPushInstruction(this.createArrayArgument())
-      this.appendPushInstruction(this.createStringArgument('push'))
-
-      this.appendGetPropertyInstruction()
-
-      this.appendPushInstruction(this.createVariableArgument(argumentsArrayToCall))
-      this.appendPushInstruction(this.createVariableArgument(argumentArr))
-
-      this.appendApplyInstruction()
+      this.appendPushInstruction(this.translateExpression(argument))
     })
 
-    return argumentsArrayToCall
+    this.appendBuildArrayInstruction(this.createNumberArgument(args.length))
+    const target = this.context.incr()
+    this.appendPopInstruction(this.createNumberArgument(target))
+    return target
   }
 
   private pushCallExpressionOntoStack(node: babel.types.CallExpression) {
-    const targetOfCallArguments = this.pushCallArgumentsOntoStack(node.arguments)
+    const targetOfCallArguments = this.buildArgumentsListVariable(node.arguments)
+
     switch (node.callee.type) {
       case 'MemberExpression':
         this.pushMemberExpressionOntoStack(node.callee)
         this.appendGetPropertyInstruction()
-        this.appendPushInstruction(this.createUndefinedArgument())
+        this.appendPushInstruction(this.translateExpression(node.callee.object))
         this.appendPushInstruction(this.createVariableArgument(targetOfCallArguments))
         this.appendApplyInstruction()
         break
 
       case 'Identifier':
+        if (this.isAFunction(node.callee.name)) {
+          const stub = this.functionTable.get(node.callee.name)
+          if (stub === undefined) throw 'FUNCTION_STUB_NOT_FOUND'
+          this.appendPushStackFrameInstruction(this.createVariableArgument(targetOfCallArguments))
+          this.appendPushInstruction(this.createAddrStubArgument(stub))
+          this.appendJmpInstruction()
+          // The above code must satisfy opcode length = 10
+          break
+        }
         this.appendPushInstruction(this.translateExpression(node.callee))
         this.appendPushInstruction(this.createUndefinedArgument())
         this.appendPushInstruction(this.createVariableArgument(targetOfCallArguments))
@@ -918,18 +948,35 @@ export default class Compiler {
     this.appendStubInstruction(this.createAddrStubArgument(stub))
 
     this.context.push()
+    node.params.forEach((param, index) => {
+      switch (param.type) {
+        case 'Identifier':
+          const target = this.context.incr()
+          this.initializeVariable(param.name, target)
 
-    this.appendStubInstruction(this.createAddrStubArgument(stub))
+          this.appendStoreInstruction([
+            this.createNumberArgument(target),
+            this.createParameterArgument(index)
+          ])
+          break
+        default:
+          console.error(param.type)
+          throw 'UNHANDLED_FUNCTION_PARAM'
+      }
+    })
 
     this.buildIR(node.body.body)
 
-    this.appendPopStackFrameInstruction()
+    if (node.body.body.length === 0 || node.body.body[node.body.body.length - 1].type !== 'ReturnStatement') {
+      this.appendPushInstruction(this.createUndefinedArgument())
+      this.appendPopStackFrameInstruction()
+    }
+
     this.context.pop()
   }
 
   private buildIR(statements: babel.types.Statement[], isMain = false) {
     const oepStub: Stub = {index: -1, type: StubType.OEP}
-    let oepSet = false
 
     if (isMain) {
       this.appendPushInstruction(this.createAddrStubArgument(oepStub))
@@ -939,9 +986,9 @@ export default class Compiler {
     statements.forEach(statement => {
       let stub: Stub = undefined
 
-      if (isMain && !oepSet && statement.type !== 'FunctionDeclaration') {
+      if (isMain && !this.oepSet && statement.type !== 'FunctionDeclaration') {
         this.appendStubInstruction(this.createAddrStubArgument(oepStub))
-        oepSet = true
+        this.oepSet = true
       }
 
       switch (statement.type) {
@@ -964,16 +1011,7 @@ export default class Compiler {
         case 'ExpressionStatement':
           switch (statement.expression.type) {
             case 'CallExpression':
-              if (statement.expression.callee.type === 'Identifier' && this.isAFunction(statement.expression.callee.name)) {
-                const stub = this.functionTable.get(statement.expression.callee.name)
-                if (stub === undefined) throw 'FUNCTION_STUB_NOT_FOUND'
-                this.appendPushStackFrameInstruction()
-                this.appendPushInstruction(this.createAddrStubArgument(stub))
-                this.appendJmpInstruction()
-                // The above code must satisfy opcode length = 10
-              } else {
-                this.pushCallExpressionOntoStack(statement.expression)
-              }
+              this.pushCallExpressionOntoStack(statement.expression)
               // Pop the return data of the calling from stack since it is not received.
               this.appendPopInstruction(this.createUndefinedArgument())
               break
@@ -1024,6 +1062,11 @@ export default class Compiler {
           this.translateFunctionDeclaration(statement)
           break
 
+        case 'ReturnStatement':
+          this.appendPushInstruction(this.translateExpression(statement.argument))
+          this.appendPopStackFrameInstruction()
+          break
+
         default:
           console.error(statement.type)
           throw 'UNHANDLED_NODE'
@@ -1033,6 +1076,13 @@ export default class Compiler {
 
   compile() {
     this.buildIR(this.ast.program.body, true)
+    if (!this.oepSet) {
+      console.log(chalk.yellow('The program does not have an valid entry point, the output will be blank!'))
+      return {
+        instructions: [],
+        inheritsContext: true
+      }
+    }
     return this.ir
   }
 }

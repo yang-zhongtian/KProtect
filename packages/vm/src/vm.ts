@@ -5,6 +5,7 @@ import { toUint8Array } from 'js-base64'
 interface Context {
   stack: any[]
   variables: any[]
+  parameters: any[]
   tracebackPC?: number
 }
 
@@ -14,7 +15,8 @@ class VMStack {
   constructor() {
     this.context.push({
       stack: [],
-      variables: []
+      variables: [],
+      parameters: []
     })
   }
 
@@ -28,10 +30,11 @@ class VMStack {
     return this.context[this.context.length - 1].stack.pop()
   }
 
-  pushFrame(tracebackPC: number) {
+  pushFrame(parameters: any[], tracebackPC: number) {
     this.context.push({
       stack: [],
       variables: [],
+      parameters,
       tracebackPC
     })
   }
@@ -47,28 +50,25 @@ class VMStack {
   set(index: number, value: any) {
     this.context[this.context.length - 1].variables[index] = value
   }
+
+  getParameter(index: number) {
+    return this.context[this.context.length - 1].parameters[index]
+  }
 }
 
 export default class VM {
   private readonly bytecode: Uint8Array
   private readonly strings: string[]
-  private readonly dependencies = [window, console]
+  private readonly dependencies: any[]
   private readonly vmStack: VMStack
   // private readonly tracebackStack: Stack<Function>
   private programCounter: number
 
-  constructor(bytecode: string, strings: string[]) {
+  constructor(localWindow: Window, bytecode: string, strings: string[]) {
     this.bytecode = this.decodeBytecode(bytecode)
-
     this.strings = strings
+    this.dependencies = [localWindow, console]
     this.vmStack = new VMStack()
-
-    // this.tracebackStack = new Stack()
-    // this.tracebackStack.push(() => {
-    //     // if we call this function from main context then we just exit
-    //     this.programCounter = this.bytecode.length + 1
-    //     // this.programCounter = +inf
-    // })
     this.programCounter = 0
   }
 
@@ -92,14 +92,15 @@ export default class VM {
 
   private getValue() {
     const header = this.bytecode[this.programCounter++]
+    let ptr: any
 
     switch (header) {
       // defines where our value is coming from, either we're directly loading in a value
       // popping from stack,
       // or we're fetching it from local variable
       case Header.LOAD_STRING:
-        const stringPointer = this.byteArrayToLong(this.load8ByteArray())
-        return this.strings[stringPointer]
+        ptr = this.byteArrayToLong(this.load8ByteArray())
+        return this.strings[ptr]
 
       case Header.LOAD_NUMBER:
         return this.byteArrayToLong(this.load8ByteArray())
@@ -108,18 +109,19 @@ export default class VM {
         return this.vmStack.pop()
 
       case Header.FETCH_VARIABLE:
-        const variable = this.bytecode[this.programCounter++]
-        return this.vmStack.get(variable)
+        ptr = this.bytecode[this.programCounter++]
+        return this.vmStack.get(ptr)
 
       case Header.FETCH_DEPENDENCY:
-        const depPointer = this.bytecode[this.programCounter++]
-        return this.dependencies[depPointer]
+        ptr = this.bytecode[this.programCounter++]
+        return this.dependencies[ptr]
+
+      case Header.FETCH_PARAMETER:
+        ptr = this.bytecode[this.programCounter++]
+        return this.vmStack.getParameter(ptr)
 
       case Header.LOAD_UNDEFINED:
         return undefined
-
-      case Header.LOAD_ARRAY:
-        return []
 
       case Header.LOAD_OBJECT:
         return {}
@@ -160,9 +162,21 @@ export default class VM {
         arg$1 = this.vmStack.pop()
         this.vmStack.push(arg$1 % arg$2)
         break
-      case Opcode.NEG:
+      case Opcode.NOT:
         arg$1 = this.vmStack.pop()
         this.vmStack.push(!arg$1)
+        break
+      case Opcode.POS:
+        arg$1 = this.vmStack.pop()
+        this.vmStack.push(+arg$1)
+        break
+      case Opcode.NEG:
+        arg$1 = this.vmStack.pop()
+        this.vmStack.push(-arg$1)
+        break
+      case Opcode.BITWISE_NOT:
+        arg$1 = this.vmStack.pop()
+        this.vmStack.push(~arg$1)
         break
       case Opcode.STORE:
         arg$1 = this.getValue()
@@ -261,7 +275,10 @@ export default class VM {
         this.vmStack.push(arg$1 >> arg$2)
         break
       case Opcode.BITWISE_UNSIGNED_RIGHT_SHIFT:
-        throw 'UNFINISHED'
+        arg$2 = this.vmStack.pop()
+        arg$1 = this.vmStack.pop()
+        this.vmStack.push(arg$1 >>> arg$2)
+        break
       case Opcode.PUSH:
         this.vmStack.push(this.getValue())
         break
@@ -277,9 +294,13 @@ export default class VM {
         arg$1 = this.vmStack.pop()
         this.vmStack.push(new arg$1(arg$2))
         break
-      case Opcode.INIT_ARRAY:
-        arg$1 = this.vmStack.pop()
-        this.vmStack.push([arg$1])
+      case Opcode.BUILD_ARRAY:
+        arg$1 = this.getValue()
+        const arr = []
+        for (let i = 0; i < arg$1; i++) {
+          arr.unshift(this.vmStack.pop())
+        }
+        this.vmStack.push(arr)
         break
       case Opcode.VOID:
         throw 'UNFINISHED'
@@ -288,11 +309,13 @@ export default class VM {
       case Opcode.DELETE:
         throw 'UNFINISHED'
       case Opcode.PUSH_STACK_FRAME:
-        this.vmStack.pushFrame(this.programCounter)
+        const params = this.getValue()
+        this.vmStack.pushFrame(params, this.programCounter)
         break
       case Opcode.POP_STACK_FRAME:
         const ctx = this.vmStack.popFrame()
         this.programCounter = ctx.tracebackPC + 11 // PUSH LOAD_NUMBER 8_BYTE_ADDR NEXT_OPCODE
+        this.vmStack.push(ctx.stack.pop())
         break
       default:
         console.warn(opcode, this.programCounter)

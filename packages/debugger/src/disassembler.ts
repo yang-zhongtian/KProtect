@@ -34,17 +34,18 @@ export default class Disassembler {
 
   private getValue(withType = true) {
     const header = this.bytecode[this.programCounter++]
+    let ptr: any
 
     switch (header) {
       // defines where our value is coming from, either we're directly loading in a value
       // popping from stack,
       // or we're fetching it from local variable
       case Header.LOAD_STRING:
-        const stringPointer = this.byteArrayToLong(this.load8ByteArray())
+        ptr = this.byteArrayToLong(this.load8ByteArray())
         if (!withType) {
-          return this.strings[stringPointer]
+          return this.strings[ptr]
         }
-        return `STRING(${JSON.stringify(this.strings[stringPointer])})`
+        return `STRING(${JSON.stringify(this.strings[ptr])})`
 
       case Header.LOAD_NUMBER:
         if (!withType) {
@@ -56,24 +57,20 @@ export default class Disassembler {
         return 'POP_STACK'
 
       case Header.FETCH_VARIABLE:
-        const variable = this.bytecode[this.programCounter++]
-        return `FETCH_VARIABLE var[${variable}]`
+        ptr = this.bytecode[this.programCounter++]
+        return `FETCH_VARIABLE var[${ptr}]`
 
       case Header.FETCH_DEPENDENCY:
-        const depPointer = this.bytecode[this.programCounter++]
-        return `FETCH_DEPENDENCY ${this.dependencies[depPointer]}`
+        ptr = this.bytecode[this.programCounter++]
+        return `FETCH_DEPENDENCY ${this.dependencies[ptr]}`
+
+      case Header.FETCH_PARAMETER:
 
       case Header.LOAD_UNDEFINED:
         if (!withType) {
           return undefined
         }
         return `undefined`
-
-      case Header.LOAD_ARRAY:
-        if (!withType) {
-          return []
-        }
-        return `LIST([])`
 
       case Header.LOAD_OBJECT:
         if (!withType) {
@@ -106,8 +103,17 @@ export default class Disassembler {
       case Opcode.MOD:
         console.log('MOD')
         break
+      case Opcode.NOT:
+        console.log('NOT')
+        break
+      case Opcode.POS:
+        console.log('POS')
+        break
       case Opcode.NEG:
         console.log('NEG')
+        break
+      case Opcode.BITWISE_NOT:
+        console.log('BITWISE_NOT')
         break
       case Opcode.STORE:
         varLoc = this.getValue(false)
@@ -197,8 +203,9 @@ export default class Disassembler {
       case Opcode.INIT_CONSTRUCTOR:
         console.log('INIT_CONSTRUCTOR')
         break
-      case Opcode.INIT_ARRAY:
-        console.log('INIT_ARRAY')
+      case Opcode.BUILD_ARRAY:
+        value = this.getValue(false)
+        console.log(`BUILD_ARRAY ${value}`)
         break
       case Opcode.VOID:
         console.log('VOID')
@@ -210,7 +217,8 @@ export default class Disassembler {
         console.log('DELETE')
         break
       case Opcode.PUSH_STACK_FRAME:
-        console.log('PUSH_STACK_FRAME')
+        value = this.getValue()
+        console.log(`PUSH_STACK_FRAME ${value}`)
         break
       case Opcode.POP_STACK_FRAME:
         console.log('POP_STACK_FRAME')

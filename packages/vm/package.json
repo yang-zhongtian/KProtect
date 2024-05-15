@@ -3,9 +3,10 @@
   "version": "1.0.0",
   "license": "GPL-3.0",
   "scripts": {
-    "build": "rollup --config rollup.config.js"
+    "build": "rollup --config rollup.config.mjs"
   },
-  "type": "module",
+  "main": "dist/vm.commonjs.js",
+  "module": "dist/vm.es.js",
   "devDependencies": {
     "@babel/core": "^7.24.5",
     "@babel/preset-env": "^7.20.2",
