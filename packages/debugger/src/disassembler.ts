@@ -67,6 +67,8 @@ export default class Disassembler {
         return `FETCH_DEPENDENCY ${this.dependencies[ptr]}`
 
       case Header.FETCH_PARAMETER:
+        ptr = this.bytecode[this.programCounter++]
+        return `FETCH_PARAMETER param[${ptr}]`
 
       case Header.LOAD_UNDEFINED:
         if (!withType) {
