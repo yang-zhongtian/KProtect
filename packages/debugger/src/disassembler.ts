@@ -228,7 +228,8 @@ export default class Disassembler {
   }
 
   private log(message: string) {
-    this.result += `${this.programCounter}: ${message}\n`
+    const padLen = String(this.bytecode.length).length
+    this.result += `${String(this.programCounter).padStart(padLen)}: ${message}\n`
   }
 
   start() {
