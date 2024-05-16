@@ -107,7 +107,9 @@ export default class Compiler {
     const ast = babel.transformFromAstSync(parse(source), source, {
       ast: true,
       code: false,
-      presets: ['@babel/preset-env']
+      presets: [['@babel/preset-env', {
+        modules: false
+      }]]
     })?.ast
     if (!ast) throw 'TRANSFER_TO_ES5_FAILED'
     return ast
@@ -320,9 +322,30 @@ export default class Compiler {
       case 'ArrayExpression':
         return this.createVariableArgument(this.buildArgumentsListVariable(node.elements))
 
+      case 'ConditionalExpression':
+        this.appendPushInstruction(this.translateExpression(node.test))
+        const stub_else = this.makeStub(StubType.CONDITION_ELSE)
+        const stub_end = this.makeStub(StubType.CONDITION_END)
+        this.appendPushInstruction(this.createAddrStubArgument(stub_else))
+        this.appendJmpZeroInstruction()
+
+        this.appendPushInstruction(this.translateExpression(node.consequent))
+        this.appendPushInstruction(this.createAddrStubArgument(stub_end))
+        this.appendJmpInstruction()
+        this.appendStubInstruction(this.createAddrStubArgument(stub_else))
+
+        this.appendPushInstruction(this.translateExpression(node.alternate))
+        this.appendStubInstruction(this.createAddrStubArgument(stub_end))
+
+        target = this.context.incr()
+        this.appendPopInstruction(this.createNumberArgument(target))
+        return this.createVariableArgument(target)
+
+      case 'BooleanLiteral':
+        return this.createNumberArgument(node.value ? 1 : 0)
+
       default:
-        console.error(node)
-        throw 'UNHANDLED_VALUE'
+        throw `UNHANDLED_VALUE ${node.type}`
     }
   }
 
@@ -337,6 +360,13 @@ export default class Compiler {
     this.pushInstruction({
       opcode: Opcode.GET_PROPERTY,
       args: []
+    })
+  }
+
+  private appendSetPropertyInstruction(value: InstructionArgument) {
+    this.pushInstruction({
+      opcode: Opcode.SET_PROPERTY,
+      args: [value]
     })
   }
 
@@ -756,9 +786,32 @@ export default class Compiler {
         throw 'UNHANDLED_MEMBER_EXPRESSION_STATE'
     }
 
-    if (node.property.type !== 'Identifier') throw 'UNHANDLED_PROPERTY_TYPE'
-
-    this.appendPushInstruction(this.createStringArgument(node.property.name))
+    switch (node.property.type) {
+      case 'Identifier':
+        if (this.isVariableInitialized(node.property.name)) {
+          const reg = this.context.get(node.property.name)
+          if (reg === undefined) {
+            console.error(node.property.name)
+            throw 'VARIABLE_NOT_FOUND'
+          }
+          this.appendPushInstruction(this.createVariableArgument(reg))
+          break
+        }
+        this.appendPushInstruction(this.createStringArgument(node.property.name))
+        break
+      case 'NumericLiteral':
+        this.appendPushInstruction(this.createNumberArgument(node.property.value))
+        break
+      case 'MemberExpression':
+        this.pushMemberExpressionOntoStack(node.property)
+        this.appendGetPropertyInstruction()
+        break
+      case 'BinaryExpression':
+        this.translateBinaryExpression(node.property)
+        break
+      default:
+        throw `UNHANDLED_PROPERTY_TYPE ${node.property.type}`
+    }
   }
 
   /**
@@ -898,42 +951,53 @@ export default class Compiler {
 
   private translateVariableDeclaration(node: babel.types.VariableDeclaration) {
     node.declarations.forEach(declaration => {
-      if (declaration.id.type !== 'Identifier') {
-        throw 'UNHANDLED_VARIABLE_DECL_ID'
-      }
+      switch (declaration.id.type) {
+        case 'Identifier':
+          if (this.isVariableInitialized(declaration.id.name)) {
+            this.translateVariableAssignment(declaration.id, declaration.init)
+            break
+          }
+          const target = this.context.incr()
 
-      if (this.isVariableInitialized(declaration.id.name)) {
-        this.translateVariableAssignment(declaration.id, declaration.init)
-      } else {
-        const target = this.context.incr()
-        this.initializeVariable(declaration.id.name, target)
+          this.appendStoreInstruction([
+            this.createNumberArgument(target),
+            this.translateExpression(declaration.init)
+          ])
 
-        this.appendStoreInstruction([
-          this.createNumberArgument(target),
-          this.translateExpression(declaration.init)
-        ])
+          this.initializeVariable(declaration.id.name, target)
+          break
+        default:
+          throw `UNHANDLED_VARIABLE_DECL_ID ${declaration.id.type}`
       }
     })
   }
 
   private translateVariableAssignment(node: babel.types.LVal, value: babel.types.Expression | null | undefined) {
-    if (node.type !== 'Identifier') {
-      throw 'UNHANDLED_VARIABLE_DECL_ID'
-    }
+    switch (node.type) {
+      case 'Identifier':
+        if (!this.isVariableInitialized(node.name)) {
+          throw 'VARIABLE_NOT_DEFINED'
+        }
 
-    if (!this.isVariableInitialized(node.name)) {
-      throw 'VARIABLE_NOT_DEFINED'
-    }
+        const reg = this.context.get(node.name)
+        if (reg === undefined) {
+          throw 'UNHANDLED'
+        }
 
-    const reg = this.context.get(node.name)
-    if (reg === undefined) {
-      throw 'UNHANDLED'
-    }
+        this.appendStoreInstruction([
+          this.createNumberArgument(reg),
+          this.translateExpression(value)
+        ])
+        break
 
-    this.appendStoreInstruction([
-      this.createNumberArgument(reg),
-      this.translateExpression(value)
-    ])
+      case 'MemberExpression':
+        this.pushMemberExpressionOntoStack(node)
+        this.appendSetPropertyInstruction(this.translateExpression(value))
+        break
+
+      default:
+        throw `UNHANDLED_VARIABLE_ASSIGNMENT ${node.type}`
+    }
   }
 
   private translateFunctionDeclaration(node: babel.types.FunctionDeclaration) {
@@ -1067,9 +1131,19 @@ export default class Compiler {
           this.appendPopStackFrameInstruction()
           break
 
+        case 'ThrowStatement':
+          this.appendPushInstruction(this.translateExpression(statement.argument))
+          this.pushInstruction({
+            opcode: Opcode.THROW,
+            args: []
+          })
+          break
+
+        case 'EmptyStatement':
+          break
+
         default:
-          console.error(statement.type)
-          throw 'UNHANDLED_NODE'
+          throw `UNHANDLED_NODE ${statement.type}`
       }
     })
   }

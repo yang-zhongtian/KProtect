@@ -7,11 +7,13 @@ export default class Disassembler {
   private readonly strings: string[]
   private readonly dependencies = ['window', 'console']
   private programCounter: number
+  private result: string
 
   constructor(bytecode: string, strings: string[]) {
     this.bytecode = this.decodeBytecode(bytecode)
     this.strings = strings
     this.programCounter = 0
+    this.result = ''
   }
 
   private decodeBytecode(bytecode: string): Uint8Array {
@@ -89,149 +91,155 @@ export default class Disassembler {
 
     switch (opcode) {
       case Opcode.ADD:
-        console.log('ADD')
+        this.log('ADD')
         break
       case Opcode.SUB:
-        console.log('SUB')
+        this.log('SUB')
         break
       case Opcode.MUL:
-        console.log('MUL')
+        this.log('MUL')
         break
       case Opcode.DIV:
-        console.log('DIV')
+        this.log('DIV')
         break
       case Opcode.MOD:
-        console.log('MOD')
+        this.log('MOD')
         break
       case Opcode.NOT:
-        console.log('NOT')
+        this.log('NOT')
         break
       case Opcode.POS:
-        console.log('POS')
+        this.log('POS')
         break
       case Opcode.NEG:
-        console.log('NEG')
+        this.log('NEG')
         break
       case Opcode.BITWISE_NOT:
-        console.log('BITWISE_NOT')
+        this.log('BITWISE_NOT')
         break
       case Opcode.STORE:
         varLoc = this.getValue(false)
         value = this.getValue()
-        console.log(`STORE ${value} => var[${varLoc}]`)
+        this.log(`STORE ${value} => var[${varLoc}]`)
         break
       case Opcode.GET_PROPERTY:
-        console.log('GET_PROPERTY')
+        this.log('GET_PROPERTY')
         break
       case Opcode.SET_PROPERTY:
-        console.log('SET_PROPERTY')
+        value = this.getValue()
+        this.log(`SET_PROPERTY ${value}`)
         break
       case Opcode.EXISTS:
-        console.log('EXISTS')
+        this.log('EXISTS')
         break
       case Opcode.DELETE_PROPERTY:
-        console.log('DELETE_PROPERTY')
+        this.log('DELETE_PROPERTY')
         break
       case Opcode.IN:
-        console.log('IN')
+        this.log('IN')
         break
       case Opcode.INSTANCE_OF:
-        console.log('INSTANCE_OF')
+        this.log('INSTANCE_OF')
         break
       case Opcode.TYPEOF:
-        console.log('TYPEOF')
+        this.log('TYPEOF')
         break
       case Opcode.APPLY:
-        console.log('APPLY')
+        this.log('APPLY')
         break
       case Opcode.EQUAL:
-        console.log('EQUAL')
+        this.log('EQUAL')
         break
       case Opcode.NOT_EQUAL:
-        console.log('NOT_EQUAL')
+        this.log('NOT_EQUAL')
         break
       case Opcode.LESS_THAN:
-        console.log('LESS_THAN')
+        this.log('LESS_THAN')
         break
       case Opcode.GREATER_THAN:
-        console.log('GREATER_THAN')
+        this.log('GREATER_THAN')
         break
       case Opcode.JMP:
-        console.log('JMP')
+        this.log('JMP')
         break
       case Opcode.JZ:
-        console.log('JZ')
+        this.log('JZ')
         break
       case Opcode.ADDR_STUB:
-        console.log('ADDR_STUB')
+        this.log('ADDR_STUB')
         break
       case Opcode.AND:
-        console.log('AND')
+        this.log('AND')
         break
       case Opcode.OR:
-        console.log('OR')
+        this.log('OR')
         break
       case Opcode.BITWISE_AND:
-        console.log('BITWISE_AND')
+        this.log('BITWISE_AND')
         break
       case Opcode.BITWISE_OR:
-        console.log('BITWISE_OR')
+        this.log('BITWISE_OR')
         break
       case Opcode.BITWISE_XOR:
-        console.log('BITWISE_XOR')
+        this.log('BITWISE_XOR')
         break
       case Opcode.BITWISE_LEFT_SHIFT:
-        console.log('BITWISE_LEFT_SHIFT')
+        this.log('BITWISE_LEFT_SHIFT')
         break
       case Opcode.BITWISE_RIGHT_SHIFT:
-        console.log('BITWISE_RIGHT_SHIFT')
+        this.log('BITWISE_RIGHT_SHIFT')
         break
       case Opcode.BITWISE_UNSIGNED_RIGHT_SHIFT:
-        console.log('BITWISE_UNSIGNED_RIGHT_SHIFT')
+        this.log('BITWISE_UNSIGNED_RIGHT_SHIFT')
         break
       case Opcode.PUSH:
-        console.log('PUSH', this.getValue())
+        this.log(`PUSH ${this.getValue()}`)
         break
       case Opcode.POP:
         varLoc = this.getValue(false)
         if (varLoc === undefined) {
-          console.log('POP')
+          this.log('POP')
           break
         }
-        console.log(`POP => var[${varLoc}]`)
+        this.log(`POP => var[${varLoc}]`)
         break
       case Opcode.INIT_CONSTRUCTOR:
-        console.log('INIT_CONSTRUCTOR')
+        this.log('INIT_CONSTRUCTOR')
         break
       case Opcode.BUILD_ARRAY:
         value = this.getValue(false)
-        console.log(`BUILD_ARRAY ${value}`)
+        this.log(`BUILD_ARRAY ${value}`)
         break
       case Opcode.VOID:
-        console.log('VOID')
+        this.log('VOID')
         break
       case Opcode.THROW:
-        console.log('THROW')
+        this.log('THROW')
         break
       case Opcode.DELETE:
-        console.log('DELETE')
+        this.log('DELETE')
         break
       case Opcode.PUSH_STACK_FRAME:
         value = this.getValue()
-        console.log(`PUSH_STACK_FRAME ${value}`)
+        this.log(`PUSH_STACK_FRAME ${value}`)
         break
       case Opcode.POP_STACK_FRAME:
-        console.log('POP_STACK_FRAME')
+        this.log('POP_STACK_FRAME')
         break
       default:
         throw new Error(`Unknown opcode: ${opcode}`)
     }
   }
 
+  private log(message: string) {
+    this.result += `${message}\n`
+  }
+
   start() {
-    console.log(this.bytecode)
+    this.result = ''
     while (this.programCounter < this.bytecode.length) {
       this.disassemble()
     }
+    return this.result
   }
 }

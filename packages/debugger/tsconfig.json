@@ -2,9 +2,9 @@
   "compilerOptions": {
     "allowSyntheticDefaultImports": true,
     "sourceMap": true,
-    "declaration": false,
-    "target": "es6",
-    "module": "ESNext",
+    "declaration": true,
+    "target": "esnext",
+    "module": "commonjs",
     "moduleResolution": "node",
     "esModuleInterop": true,
     "noEmitOnError": true,
@@ -13,12 +13,13 @@
     "removeComments": true,
     "emitDecoratorMetadata": true,
     "experimentalDecorators": true,
-    "resolveJsonModule": true,
     "rootDir": "./src",
+    "outDir": "./dist",
+    "skipLibCheck": true,
     "lib": [
       "DOM",
       "ES6",
-      "ES7",
+      "ES7"
     ]
   }
 }

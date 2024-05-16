@@ -3,20 +3,12 @@
   "version": "1.0.0",
   "license": "GPL-3.0",
   "scripts": {
-    "build": "rollup --config rollup.config.js"
+    "build": "tsc"
   },
-  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "devDependencies": {
     "@babel/core": "^7.24.5",
-    "@rollup/plugin-babel": "^6.0.4",
-    "@rollup/plugin-commonjs": "^25.0.7",
-    "@rollup/plugin-json": "^6.1.0",
-    "@rollup/plugin-node-resolve": "^15.2.3",
-    "@rollup/plugin-terser": "^0.4.4",
-    "@rollup/plugin-typescript": "^11.1.6",
-    "rollup": "^4.17.2",
-    "rollup-plugin-svelte": "^7.2.0",
-    "svelte": "^4.2.16",
     "typescript": "^5.4.5"
   }
 }

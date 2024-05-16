@@ -8,6 +8,7 @@
     "build:compiler": "yarn workspace @kprotect/compiler build",
     "build:debugger": "yarn workspace @kprotect/debugger build",
     "protect": "node cli/protect.cjs",
+    "disassemble": "node cli/disassemble.cjs",
     "test": "npm run protect -- -s protect/src.js -o protect/bundle.json",
     "unit": "yarn workspace @kprotect/test test"
   },

@@ -20,6 +20,10 @@ class VMStack {
     })
   }
 
+  printStack() {
+    console.log(this.context[this.context.length - 1].stack)
+  }
+
   push(value: any) {
     if (this.context.length === 0) throw 'STACK_UNDERFLOW'
     this.context[this.context.length - 1].stack.push(value)
@@ -183,12 +187,17 @@ export default class VM {
         this.vmStack.set(arg$1, this.getValue())
         break
       case Opcode.GET_PROPERTY:
+        this.vmStack.printStack()
         arg$2 = this.vmStack.pop()
         arg$1 = this.vmStack.pop()
         this.vmStack.push(arg$1[arg$2])
         break
       case Opcode.SET_PROPERTY:
-        throw 'UNFINISHED'
+        arg$3 = this.getValue()
+        arg$2 = this.vmStack.pop()
+        arg$1 = this.vmStack.pop()
+        arg$1[arg$2] = arg$3
+        break
       case Opcode.EXISTS:
         throw 'UNFINISHED'
       case Opcode.DELETE_PROPERTY:
@@ -305,17 +314,18 @@ export default class VM {
       case Opcode.VOID:
         throw 'UNFINISHED'
       case Opcode.THROW:
-        throw 'UNFINISHED'
+        arg$1 = this.vmStack.pop()
+        throw arg$1
       case Opcode.DELETE:
         throw 'UNFINISHED'
       case Opcode.PUSH_STACK_FRAME:
-        const params = this.getValue()
-        this.vmStack.pushFrame(params, this.programCounter)
+        arg$1 = this.getValue()
+        this.vmStack.pushFrame(arg$1, this.programCounter)
         break
       case Opcode.POP_STACK_FRAME:
-        const ctx = this.vmStack.popFrame()
-        this.programCounter = ctx.tracebackPC + 11 // PUSH LOAD_NUMBER 8_BYTE_ADDR NEXT_OPCODE
-        this.vmStack.push(ctx.stack.pop())
+        arg$1 = this.vmStack.popFrame()
+        this.programCounter = arg$1.tracebackPC + 11 // PUSH LOAD_NUMBER 8_BYTE_ADDR NEXT_OPCODE
+        this.vmStack.push(arg$1.stack.pop())
         break
       default:
         console.warn(opcode, this.programCounter)
