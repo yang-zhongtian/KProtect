@@ -170,12 +170,6 @@ export default class Disassembler {
       case Opcode.ADDR_STUB:
         this.log('ADDR_STUB')
         break
-      case Opcode.AND:
-        this.log('AND')
-        break
-      case Opcode.OR:
-        this.log('OR')
-        break
       case Opcode.BITWISE_AND:
         this.log('BITWISE_AND')
         break
@@ -234,7 +228,7 @@ export default class Disassembler {
   }
 
   private log(message: string) {
-    this.result += `${message}\n`
+    this.result += `${this.programCounter}: ${message}\n`
   }
 
   start() {

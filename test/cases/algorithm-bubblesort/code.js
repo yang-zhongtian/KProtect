@@ -9,8 +9,9 @@ function bubbleSort(items) {
         for (let j = 0; j < i - 1; j++) {
             // Compare the adjacent positions
             if (items[j] > items[j + 1]) {
-                // Swap the numbers
-                ;[items[j], items[j + 1]] = [items[j + 1], items[j]]
+                const temp = items[j]
+                items[j] = items[j + 1]
+                items[j + 1] = temp
                 noSwaps = false
             }
         }

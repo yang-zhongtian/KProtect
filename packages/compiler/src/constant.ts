@@ -35,8 +35,6 @@ export const enum Opcode {
   JMP,
   JZ,
   ADDR_STUB,
-  AND,
-  OR,
   BITWISE_AND,
   BITWISE_OR,
   BITWISE_XOR,

@@ -187,7 +187,6 @@ export default class VM {
         this.vmStack.set(arg$1, this.getValue())
         break
       case Opcode.GET_PROPERTY:
-        this.vmStack.printStack()
         arg$2 = this.vmStack.pop()
         arg$1 = this.vmStack.pop()
         this.vmStack.push(arg$1[arg$2])
@@ -247,16 +246,6 @@ export default class VM {
         arg$2 = this.vmStack.pop()
         arg$1 = this.vmStack.pop()
         if (!arg$1) this.jmpToBlock(arg$2)
-        break
-      case Opcode.AND:
-        arg$2 = this.vmStack.pop()
-        arg$1 = this.vmStack.pop()
-        this.vmStack.push(arg$1 && arg$2)
-        break
-      case Opcode.OR:
-        arg$2 = this.vmStack.pop()
-        arg$1 = this.vmStack.pop()
-        this.vmStack.push(arg$1 || arg$2)
         break
       case Opcode.BITWISE_AND:
         arg$2 = this.vmStack.pop()

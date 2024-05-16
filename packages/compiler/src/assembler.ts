@@ -102,6 +102,7 @@ export default class BytecodeCompiler {
         if (addr === undefined) throw 'DYNAMIC_ADDRESS_NOT_FOUND'
         bytes[index] = Header.LOAD_NUMBER
         bytes.splice(index + 1, 8, ...this.longToByteArray(addr))
+        index += 8
       }
     }
 

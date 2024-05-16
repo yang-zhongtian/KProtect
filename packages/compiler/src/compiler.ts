@@ -30,6 +30,8 @@ enum StubType {
   LOOP_UPDATE,
   LOOP_END,
   FUNCTION_START,
+  LOGICAL_BYPASS,
+  LOGICAL_END,
   OEP
 }
 
@@ -107,9 +109,9 @@ export default class Compiler {
     const ast = babel.transformFromAstSync(parse(source), source, {
       ast: true,
       code: false,
-      presets: [['@babel/preset-env', {
-        modules: false
-      }]]
+      configFile: false,
+      plugins: [],
+      presets: []
     })?.ast
     if (!ast) throw 'TRANSFER_TO_ES5_FAILED'
     return ast
@@ -344,6 +346,20 @@ export default class Compiler {
       case 'BooleanLiteral':
         return this.createNumberArgument(node.value ? 1 : 0)
 
+      case 'SequenceExpression':
+        node.expressions.forEach(expression => {
+          this.appendPushInstruction(this.translateExpression(expression))
+        })
+        target = this.context.incr()
+        this.appendPopInstruction(this.createNumberArgument(target))
+        return this.createVariableArgument(target)
+
+      case 'AssignmentExpression':
+        this.translateVariableAssignment(node.left, node.right)
+        target = this.context.incr()
+        this.appendPopInstruction(this.createNumberArgument(target))
+        return this.createVariableArgument(target)
+
       default:
         throw `UNHANDLED_VALUE ${node.type}`
     }
@@ -483,6 +499,16 @@ export default class Compiler {
           args: []
         })
         break
+      case '!=':
+        left = this.translateExpression(node.left)
+        right = this.translateExpression(node.right)
+        this.appendPushInstruction(left)
+        this.appendPushInstruction(right)
+        this.pushInstruction({
+          opcode: Opcode.NOT_EQUAL,
+          args: []
+        })
+        break
       case '===':
         this.appendPushInstruction(
           this.translateExpression(
@@ -501,16 +527,6 @@ export default class Compiler {
             )
           )
         )
-        break
-      case '!=':
-        left = this.translateExpression(node.left)
-        right = this.translateExpression(node.right)
-        this.appendPushInstruction(left)
-        this.appendPushInstruction(right)
-        this.pushInstruction({
-          opcode: Opcode.NOT_EQUAL,
-          args: []
-        })
         break
       case '!==':
         this.appendPushInstruction(
@@ -713,30 +729,46 @@ export default class Compiler {
         })
         break
       default:
-        throw 'UNHANDLED_OPERATOR_BINARY_EXPRESSION'
+        throw `UNHANDLED_OPERATOR_BINARY_EXPRESSION ${node.operator}`
     }
   }
 
   private translateLogicalExpression(node: babel.types.LogicalExpression) {
     const left = this.translateExpression(node.left)
-    const right = this.translateExpression(node.right)
+
+    const stub_bypass = this.makeStub(StubType.LOGICAL_BYPASS)
+    const stub_end = this.makeStub(StubType.LOGICAL_END)
 
     switch (node.operator) {
       case '&&':
         this.appendPushInstruction(left)
-        this.appendPushInstruction(right)
-        this.pushInstruction({
-          opcode: Opcode.AND,
-          args: []
-        })
+
+        this.appendPushInstruction(this.createAddrStubArgument(stub_bypass))
+        this.appendJmpZeroInstruction()
+
+        this.appendPushInstruction(this.translateExpression(node.right))
+        this.appendPushInstruction(this.createAddrStubArgument(stub_end))
+        this.appendJmpInstruction()
+
+        this.appendStubInstruction(this.createAddrStubArgument(stub_bypass))
+        this.appendPushInstruction(this.createNumberArgument(0))
+
+        this.appendStubInstruction(this.createAddrStubArgument(stub_end))
         break
       case '||':
         this.appendPushInstruction(left)
-        this.appendPushInstruction(right)
-        this.pushInstruction({
-          opcode: Opcode.OR,
-          args: []
-        })
+
+        this.appendPushInstruction(this.createAddrStubArgument(stub_bypass))
+        this.appendJmpZeroInstruction()
+
+        this.appendPushInstruction(this.createNumberArgument(1))
+        this.appendPushInstruction(this.createAddrStubArgument(stub_end))
+        this.appendJmpInstruction()
+
+        this.appendStubInstruction(this.createAddrStubArgument(stub_bypass))
+        this.appendPushInstruction(this.translateExpression(node.right))
+
+        this.appendStubInstruction(this.createAddrStubArgument(stub_end))
         break
       default:
         throw 'UNHANDLED_OPERATOR_BINARY_EXPRESSION'
@@ -808,6 +840,9 @@ export default class Compiler {
         break
       case 'BinaryExpression':
         this.translateBinaryExpression(node.property)
+        break
+      case 'UnaryExpression':
+        this.translateUnaryExpression(node.property)
         break
       default:
         throw `UNHANDLED_PROPERTY_TYPE ${node.property.type}`
@@ -972,11 +1007,14 @@ export default class Compiler {
     })
   }
 
-  private translateVariableAssignment(node: babel.types.LVal, value: babel.types.Expression | null | undefined) {
+  private translateVariableAssignment(
+    node: babel.types.LVal | babel.types.OptionalMemberExpression,
+    value: babel.types.Expression | null | undefined
+  ) {
     switch (node.type) {
       case 'Identifier':
         if (!this.isVariableInitialized(node.name)) {
-          throw 'VARIABLE_NOT_DEFINED'
+          throw `VARIABLE_NOT_DEFINED ${node.name}`
         }
 
         const reg = this.context.get(node.name)
