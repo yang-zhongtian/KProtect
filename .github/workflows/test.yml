@@ -14,5 +14,5 @@ jobs:
         run: yarn install
       - name: Build
         run: yarn build
-      - name: Run ESLint
+      - name: Run unit test
         run: yarn unit
