@@ -65,7 +65,6 @@ export default class VM {
   private readonly strings: string[]
   private readonly dependencies: any[]
   private readonly vmStack: VMStack
-  // private readonly tracebackStack: Stack<Function>
   private programCounter: number
 
   constructor(localWindow: Window, bytecode: string, strings: string[]) {
