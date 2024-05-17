@@ -12,5 +12,7 @@ jobs:
           node-version: '20'
       - name: Install dependencies
         run: yarn install
+      - name: Build
+        run: yarn build
       - name: Run ESLint
         run: yarn unit
