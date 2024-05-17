@@ -648,23 +648,20 @@ export default class Compiler {
         })
         break
       case '<=':
-        this.appendPushInstruction(
-          this.translateExpression(
-            babel.types.logicalExpression(
-              '||',
-              babel.types.binaryExpression(
-                '<',
-                node.left,
-                node.right
-              ),
-              babel.types.binaryExpression(
-                '==',
-                node.left,
-                node.right
-              )
-            )
-          )
-        )
+        left = this.translateExpression(node.left)
+        right = this.translateExpression(node.right)
+        this.appendPushInstruction(left)
+        this.appendPushInstruction(right)
+
+        this.pushInstruction({
+          opcode: Opcode.GREATER_THAN,
+          args: []
+        })
+
+        this.pushInstruction({
+          opcode: Opcode.NOT,
+          args: []
+        })
         break
       case '>':
         left = this.translateExpression(node.left)
@@ -677,23 +674,20 @@ export default class Compiler {
         })
         break
       case '>=':
-        this.appendPushInstruction(
-          this.translateExpression(
-            babel.types.logicalExpression(
-              '||',
-              babel.types.binaryExpression(
-                '>',
-                node.left,
-                node.right
-              ),
-              babel.types.binaryExpression(
-                '==',
-                node.left,
-                node.right
-              )
-            )
-          )
-        )
+        left = this.translateExpression(node.left)
+        right = this.translateExpression(node.right)
+        this.appendPushInstruction(left)
+        this.appendPushInstruction(right)
+
+        this.pushInstruction({
+          opcode: Opcode.LESS_THAN,
+          args: []
+        })
+
+        this.pushInstruction({
+          opcode: Opcode.NOT,
+          args: []
+        })
         break
       case '&':
         left = this.translateExpression(node.left)
