@@ -222,12 +222,6 @@ export default class VM {
         // noinspection EqualityComparisonWithCoercionJS
         this.vmStack.push(arg$1 == arg$2)
         break
-      case Opcode.NOT_EQUAL:
-        arg$2 = this.vmStack.pop()
-        arg$1 = this.vmStack.pop()
-        // noinspection EqualityComparisonWithCoercionJS
-        this.vmStack.push(arg$1 != arg$2)
-        break
       case Opcode.LESS_THAN:
         arg$2 = this.vmStack.pop()
         arg$1 = this.vmStack.pop()

@@ -463,23 +463,6 @@ export default class Compiler {
     })
   }
 
-  // private declareArrVariable(): number {
-  //   const target = this.context.incr()
-  //   this.appendStoreInstruction([
-  //     this.createNumberArgument(target),
-  //     this.createArrayArgument()
-  //   ])
-  //   return target
-  // }
-  //
-  // private declareArrVariableWithValue(argument: babel.types.Expression | babel.types.SpreadElement | babel.types.JSXNamespacedName | babel.types.ArgumentPlaceholder | undefined | null): number {
-  //   this.appendPushInstruction(this.translateExpression(argument))
-  //   this.appendInitArrayInstruction()
-  //   const target = this.context.incr()
-  //   this.appendPopInstruction(this.createNumberArgument(target))
-  //   return target
-  // }
-
   /**
    * 处理二元运算符
    */
@@ -487,6 +470,7 @@ export default class Compiler {
     if (node.left.type === 'PrivateName') throw 'UNHANDLED_PRIVATE_NAME'
 
     let left: InstructionArgument, right: InstructionArgument
+    let left_var: number, right_var: number
 
     switch (node.operator) {
       case '==':
@@ -505,47 +489,103 @@ export default class Compiler {
         this.appendPushInstruction(left)
         this.appendPushInstruction(right)
         this.pushInstruction({
-          opcode: Opcode.NOT_EQUAL,
+          opcode: Opcode.EQUAL,
+          args: []
+        })
+        this.pushInstruction({
+          opcode: Opcode.NOT,
           args: []
         })
         break
       case '===':
-        this.appendPushInstruction(
-          this.translateExpression(
-            babel.types.logicalExpression(
-              '&&',
-              babel.types.binaryExpression(
-                '==',
-                node.left,
-                node.right
-              ),
-              babel.types.binaryExpression(
-                '==',
-                babel.types.unaryExpression('typeof', node.left),
-                babel.types.unaryExpression('typeof', node.right)
-              )
-            )
-          )
-        )
+        left = this.translateExpression(node.left)
+        right = this.translateExpression(node.right)
+        this.appendPushInstruction(left)
+        this.appendPushInstruction(right)
+
+        left_var = this.context.incr()
+        right_var = this.context.incr()
+        this.appendPopInstruction(this.createNumberArgument(right_var))
+        this.appendPopInstruction(this.createNumberArgument(left_var))
+
+        this.appendPushInstruction(this.createVariableArgument(left_var))
+        this.pushInstruction({
+          opcode: Opcode.TYPEOF,
+          args: []
+        })
+        this.appendPushInstruction(this.createVariableArgument(right_var))
+        this.pushInstruction({
+          opcode: Opcode.TYPEOF,
+          args: []
+        })
+        this.pushInstruction({
+          opcode: Opcode.EQUAL,
+          args: []
+        })
+
+        this.appendPushInstruction(this.createVariableArgument(left_var))
+        this.appendPushInstruction(this.createVariableArgument(right_var))
+        this.pushInstruction({
+          opcode: Opcode.EQUAL,
+          args: []
+        })
+
+        this.pushInstruction({
+          opcode: Opcode.BITWISE_AND,
+          args: []
+        })
+
+        this.pushInstruction({
+          opcode: Opcode.NOT,
+          args: []
+        })
+        this.pushInstruction({
+          opcode: Opcode.NOT,
+          args: []
+        })
         break
       case '!==':
-        this.appendPushInstruction(
-          this.translateExpression(
-            babel.types.logicalExpression(
-              '||',
-              babel.types.binaryExpression(
-                '!=',
-                node.left,
-                node.right
-              ),
-              babel.types.binaryExpression(
-                '!=',
-                babel.types.unaryExpression('typeof', node.left),
-                babel.types.unaryExpression('typeof', node.right)
-              )
-            )
-          )
-        )
+        left = this.translateExpression(node.left)
+        right = this.translateExpression(node.right)
+        this.appendPushInstruction(left)
+        this.appendPushInstruction(right)
+
+        left_var = this.context.incr()
+        right_var = this.context.incr()
+        this.appendPopInstruction(this.createNumberArgument(right_var))
+        this.appendPopInstruction(this.createNumberArgument(left_var))
+
+        this.appendPushInstruction(this.createVariableArgument(left_var))
+        this.pushInstruction({
+          opcode: Opcode.TYPEOF,
+          args: []
+        })
+        this.appendPushInstruction(this.createVariableArgument(right_var))
+        this.pushInstruction({
+          opcode: Opcode.TYPEOF,
+          args: []
+        })
+        this.pushInstruction({
+          opcode: Opcode.EQUAL,
+          args: []
+        })
+
+        this.appendPushInstruction(this.createVariableArgument(left_var))
+        this.appendPushInstruction(this.createVariableArgument(right_var))
+        this.pushInstruction({
+          opcode: Opcode.EQUAL,
+          args: []
+        })
+
+        this.pushInstruction({
+          opcode: Opcode.BITWISE_AND,
+          args: []
+        })
+
+        this.pushInstruction({
+          opcode: Opcode.NOT,
+          args: []
+        })
         break
       case '+':
         left = this.translateExpression(node.left)

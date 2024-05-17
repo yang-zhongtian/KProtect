@@ -152,9 +152,6 @@ export default class Disassembler {
       case Opcode.EQUAL:
         this.log('EQUAL')
         break
-      case Opcode.NOT_EQUAL:
-        this.log('NOT_EQUAL')
-        break
       case Opcode.LESS_THAN:
         this.log('LESS_THAN')
         break

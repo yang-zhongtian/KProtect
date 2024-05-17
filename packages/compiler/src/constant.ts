@@ -29,7 +29,6 @@ export const enum Opcode {
   TYPEOF,
   APPLY,
   EQUAL,
-  NOT_EQUAL,
   LESS_THAN,
   GREATER_THAN,
   JMP,
