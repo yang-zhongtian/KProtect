@@ -13,11 +13,6 @@ export interface Instruction {
   args: InstructionArgument[]
 }
 
-export interface Block {
-  instructions: Instruction[]
-  inheritsContext: boolean,
-}
-
 interface Stub {
   index: number,
   type: StubType
@@ -82,12 +77,17 @@ export default class Compiler {
   context: Context
   dependencies: string[]
   dependenciesUnderWindow: string[]
-  ir: Block
+  ir: Instruction[]
   private readonly stubStack: Stub[]
   private stubCounter: number
   private readonly functionTable: Map<string, Stub>
   private oepSet = false
 
+  /**
+   * Compiler constructor
+   * @constructor
+   * @param source
+   */
   constructor(source: string) {
     this.ast = this.parse(source)
     this.context = new Context()
@@ -99,12 +99,17 @@ export default class Compiler {
       'Uint16Array', 'Uint32Array', 'Uint8Array', 'Uint8ClampedArray', 'WeakMap', 'WeakSet', 'alert', 'Object',
       'decodeURI', 'decodeURIComponent', 'encodeURI', 'encodeURIComponent', 'escape', 'eval', 'isFinite',
       'isNaN', 'parseFloat', 'parseInt', 'undefined', 'unescape']
-    this.ir = this.makeNewBlock()
+    this.ir = []
     this.stubStack = []
     this.stubCounter = 0
     this.functionTable = new Map()
   }
 
+  /**
+   * Parse source code to AST
+   * @param source Source code content
+   * @private
+   */
   private parse(source: string) {
     const ast = babel.transformFromAstSync(parse(source), source, {
       ast: true,
@@ -142,7 +147,7 @@ export default class Compiler {
   }
 
   private pushInstruction(instruction: Instruction) {
-    this.ir.instructions.push(instruction)
+    this.ir.push(instruction)
   }
 
   private createNumberArgument(dst: number): InstructionArgument {
@@ -194,10 +199,21 @@ export default class Compiler {
     }
   }
 
+  /**
+   * Translate dependency expression under window, ex: window.console.log
+   * @param node Identifier node
+   * @private
+   */
   private translateDependencyExpressionUnderWindow(node: babel.types.Identifier) {
     return this.translateExpression(babel.types.memberExpression(babel.types.identifier('window'), node))
   }
 
+  /**
+   * Translate unary expression
+   * @supported typeof, !, +, -, ~
+   * @param node UnaryExpression node
+   * @private
+   */
   private translateUnaryExpression(node: babel.types.UnaryExpression) {
     this.appendPushInstruction(this.translateExpression(node.argument))
 
@@ -428,20 +444,6 @@ export default class Compiler {
     })
   }
 
-  // private appendExitInstruction() {
-  //     this.pushInstruction({
-  //         opcode: Opcode.EXIT,
-  //         args: []
-  //     })
-  // }
-
-  // private appendExitIfInstruction() {
-  //     this.pushInstruction({
-  //         opcode: Opcode.EXIT_IF,
-  //         args: []
-  //     })
-  // }
-
   private appendStubInstruction(addr: InstructionArgument) {
     this.pushInstruction({
       opcode: Opcode.ADDR_STUB,
@@ -464,7 +466,20 @@ export default class Compiler {
   }
 
   /**
-   * 处理二元运算符
+   * Translate binary expression
+   * @example ===
+   * VAR_1 = translate(left), VAR_2 = translate(right), !!(typeof VAR_1 == typeof VAR_2 & VAR_1 == VAR_2)
+   * @example !==
+   * VAR_1 = translate(left), VAR_2 = translate(right), !(typeof VAR_1 == typeof VAR_2 & VAR_1 == VAR_2)
+   * @example <=
+   * !(translate(left) > translate(right))
+   * @example \>=
+   * !(translate(left) < translate(right))
+   * @example **
+   * Math.pow(translate(left), translate(right))
+   * @supported ==, !=, ===, !==, +, -, *, /, %, <, <=, >, >=, &, |, ^, <<, >>, **, >>>
+   * @param node BinaryExpression node
+   * @private
    */
   private translateBinaryExpression(node: babel.types.BinaryExpression) {
     if (node.left.type === 'PrivateName') throw 'UNHANDLED_PRIVATE_NAME'
@@ -767,6 +782,12 @@ export default class Compiler {
     }
   }
 
+  /**
+   * Translate logical expression
+   * @param node LogicalExpression node
+   * @supported &&, ||
+   * @private
+   */
   private translateLogicalExpression(node: babel.types.LogicalExpression) {
     const left = this.translateExpression(node.left)
 
@@ -809,15 +830,14 @@ export default class Compiler {
     }
   }
 
+    /**
+     * Translate member expression
+     * @param node MemberExpression node
+     * @private
+     */
   private pushMemberExpressionOntoStack(node: babel.types.MemberExpression) {
     switch (node.object.type) {
       case 'Identifier':
-        // 举例:
-        // console.log("test") ->
-        // var bb = console["log"]
-        // bb("test")
-
-        // 依赖命中
         if (this.isADependency(node.object.name)) {
           this.appendPushInstruction(this.createDependencyArgument(this.getDependencyPointer(node.object.name)))
           break
@@ -884,9 +904,9 @@ export default class Compiler {
   }
 
   /**
-   * 处理函数调用参数，构建参数列表
-   * @param args 参数列表
-   * @return {number} 返回参数列表的指针
+   * Build arguments list variable
+   * @param args Arguments list
+   * @return {number} Target variable ptr
    */
   private buildArgumentsListVariable(args: Array<babel.types.Expression | babel.types.SpreadElement | babel.types.JSXNamespacedName | babel.types.ArgumentPlaceholder>): number {
     args.forEach(argument => {
@@ -913,12 +933,12 @@ export default class Compiler {
 
       case 'Identifier':
         if (this.isAFunction(node.callee.name)) {
+          // The code below must satisfy OpCode.length = 10
           const stub = this.functionTable.get(node.callee.name)
           if (stub === undefined) throw 'FUNCTION_STUB_NOT_FOUND'
           this.appendPushStackFrameInstruction(this.createVariableArgument(targetOfCallArguments))
           this.appendPushInstruction(this.createAddrStubArgument(stub))
           this.appendJmpInstruction()
-          // The above code must satisfy opcode length = 10
           break
         }
         this.appendPushInstruction(this.translateExpression(node.callee))
@@ -930,15 +950,6 @@ export default class Compiler {
       default:
         console.error(node.callee.type)
         throw 'UNHANDLED_CALL_EXPRESSION_TYPE'
-    }
-    // remove reference? not sure what is occupying the stack
-    // this.appendPopInstruction(this.createUndefinedArgument())
-  }
-
-  private makeNewBlock(): Block {
-    return {
-      instructions: [],
-      inheritsContext: true
     }
   }
 
@@ -986,9 +997,22 @@ export default class Compiler {
     this.stubStack.splice(-3)
   }
 
+  /**
+   * Translate if statement
+   * @example
+   * if (condition) {
+   *  // Consequent
+   * }
+   * @example
+   * if (condition) {
+   *  // Consequent
+   * } else {
+   *  // Alternate
+   * }
+   * @param node
+   * @private
+   */
   private translateIfStatement(node: babel.types.IfStatement) {
-    // let block = this.makeNewBlock()
-    // push the expression onto the stack
     this.appendPushInstruction(this.translateExpression(node.test))
 
     if (!node.alternate) {
@@ -1224,10 +1248,7 @@ export default class Compiler {
     this.buildIR(this.ast.program.body, true)
     if (!this.oepSet) {
       console.log(chalk.yellow('The program does not have an valid entry point, the output will be blank!'))
-      return {
-        instructions: [],
-        inheritsContext: true
-      }
+      return []
     }
     return this.ir
   }

@@ -1,4 +1,4 @@
-import { Block, InstructionArgument } from './compiler'
+import { Instruction, InstructionArgument } from './compiler'
 import { Header, Opcode } from './constant'
 import { zlibSync } from 'fflate'
 
@@ -12,12 +12,12 @@ export interface LookUpTable {
 }
 
 export default class BytecodeCompiler {
-  private readonly ir: Block
+  private readonly ir: Instruction[]
   private readonly strings: string[]
   bytecode: Uint8Array
   lookUpTable: LookUpTable
 
-  constructor(ir: Block) {
+  constructor(ir: Instruction[]) {
     this.ir = ir
     this.strings = []
     this.bytecode = undefined
@@ -65,8 +65,8 @@ export default class BytecodeCompiler {
     }
   }
 
-  private compileBlock(block: Block, bytes: number[]) {
-    block.instructions.forEach(instruction => {
+  private compileBlock(block: Instruction[], bytes: number[]) {
+    block.forEach(instruction => {
       const opcode = instruction.opcode
       if (opcode === undefined) throw 'UNHANDLED_OPCODE'
 
@@ -76,20 +76,11 @@ export default class BytecodeCompiler {
         return
       }
 
-      // if (OPCODE_WITH_DATA_FROM_STACK.includes(opcode)) {
-      //     instruction.args.forEach(command => {
-      //         bytes.push(Opcode.PUSH)
-      //         bytes.push(...this.compileInstructionArgument(command))
-      //     })
-      //     bytes.push(opcode)
-      // } else {
-
       bytes.push(opcode)
       instruction.args.forEach(command => {
         const compiledInstruction = this.compileInstructionArgument(command)
         bytes.push(...compiledInstruction)
       })
-      // }
     })
   }
 
