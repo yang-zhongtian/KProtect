@@ -1,6 +1,4 @@
 import { Header, Opcode } from '@kprotect/compiler'
-import { unzlibSync } from 'fflate'
-import { toUint8Array } from 'js-base64'
 
 export default class Disassembler {
   private readonly bytecode: Uint8Array
@@ -8,17 +6,13 @@ export default class Disassembler {
   private readonly dependencies = ['window', 'console']
   private programCounter: number
   private result: string
+  private currentStart = 0
 
-  constructor(bytecode: string, strings: string[]) {
-    this.bytecode = this.decodeBytecode(bytecode)
+  constructor(bytecode: Uint8Array, strings: string[]) {
+    this.bytecode = bytecode
     this.strings = strings
     this.programCounter = 0
     this.result = ''
-  }
-
-  private decodeBytecode(bytecode: string): Uint8Array {
-    const intArr = toUint8Array(bytecode)
-    return unzlibSync(intArr)
   }
 
   private byteArrayToLong(byteArray: Uint8Array): number {
@@ -219,6 +213,9 @@ export default class Disassembler {
       case Opcode.POP_STACK_FRAME:
         this.log('POP_STACK_FRAME')
         break
+      case Opcode.HALT:
+        this.log('HALT')
+        break
       default:
         throw new Error(`Unknown opcode: ${opcode}`)
     }
@@ -226,7 +223,8 @@ export default class Disassembler {
 
   private log(message: string) {
     const padLen = String(this.bytecode.length).length
-    this.result += `${String(this.programCounter).padStart(padLen)}: ${message}\n`
+    this.result += `${String(this.currentStart).padEnd(padLen)}-${String(this.programCounter - 1).padStart(padLen)}: ${message}\n`
+    this.currentStart = this.programCounter
   }
 
   start() {

@@ -39,25 +39,9 @@ function djikstra(graph, V, src) {
     return dist
 }
 
-const V = 9
-const E = [
-    [0, 1, 4],
-    [0, 7, 8],
-    [1, 7, 11],
-    [1, 2, 8],
-    [7, 8, 7],
-    [6, 7, 1],
-    [2, 8, 2],
-    [6, 8, 6],
-    [5, 6, 2],
-    [2, 5, 4],
-    [2, 3, 7],
-    [3, 5, 14],
-    [3, 4, 9],
-    [4, 5, 10]
-]
+function test(V,E){
+    const graph = createGraph(V, E)
+    return djikstra(graph, V, 0)
+}
 
-const graph = createGraph(V, E)
-const distances = djikstra(graph, V, 0)
-
-console.log(distances)
+module.exports = test;

@@ -23,5 +23,4 @@ function bubbleSort(items) {
     return items
 }
 
-const items = [5, 3, 7, 6, 2, 9]
-console.log(bubbleSort(items))
+module.exports = bubbleSort

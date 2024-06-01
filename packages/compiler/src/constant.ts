@@ -50,4 +50,5 @@ export const enum Opcode {
   DELETE,
   PUSH_STACK_FRAME,
   POP_STACK_FRAME,
+  HALT,
 }

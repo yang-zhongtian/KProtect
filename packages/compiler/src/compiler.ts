@@ -1,7 +1,6 @@
 import * as babel from '@babel/core'
 import { parse } from '@babel/parser'
 import { Header, Opcode } from './constant.js'
-import chalk from 'chalk'
 
 export interface InstructionArgument {
   type: Header
@@ -27,8 +26,9 @@ enum StubType {
   FUNCTION_START,
   LOGICAL_BYPASS,
   LOGICAL_END,
-  OEP
 }
+
+const OEP_STUB_ADDR = -1
 
 class Context {
   private context: {
@@ -70,6 +70,10 @@ class Context {
   set(name: string, value: number) {
     this.context[this.context.length - 1].variables.set(name, value)
   }
+
+  isRoot() {
+    return this.context.length === 1
+  }
 }
 
 export default class Compiler {
@@ -81,7 +85,7 @@ export default class Compiler {
   private readonly stubStack: Stub[]
   private stubCounter: number
   private readonly functionTable: Map<string, Stub>
-  private oepSet = false
+  private oepStub?: Stub
 
   /**
    * Compiler constructor
@@ -465,6 +469,13 @@ export default class Compiler {
     })
   }
 
+  private appendHaltInstruction() {
+    this.pushInstruction({
+      opcode: Opcode.HALT,
+      args: []
+    })
+  }
+
   /**
    * Translate binary expression
    * @example ===
@@ -830,11 +841,11 @@ export default class Compiler {
     }
   }
 
-    /**
-     * Translate member expression
-     * @param node MemberExpression node
-     * @private
-     */
+  /**
+   * Translate member expression
+   * @param node MemberExpression node
+   * @private
+   */
   private pushMemberExpressionOntoStack(node: babel.types.MemberExpression) {
     switch (node.object.type) {
       case 'Identifier':
@@ -1136,20 +1147,19 @@ export default class Compiler {
   }
 
   private buildIR(statements: babel.types.Statement[], isMain = false) {
-    const oepStub: Stub = {index: -1, type: StubType.OEP}
-
     if (isMain) {
-      this.appendPushInstruction(this.createAddrStubArgument(oepStub))
+      const target = this.context.incr()
+      this.appendPopInstruction(this.createNumberArgument(target))
+
+      this.appendPushStackFrameInstruction(this.createVariableArgument(target))
+      this.appendPushInstruction(this.createAddrStubArgument({index: OEP_STUB_ADDR, type: StubType.FUNCTION_START}))
       this.appendJmpInstruction()
+
+      this.appendHaltInstruction()
     }
 
     statements.forEach(statement => {
       let stub: Stub = undefined
-
-      if (isMain && !this.oepSet && statement.type !== 'FunctionDeclaration') {
-        this.appendStubInstruction(this.createAddrStubArgument(oepStub))
-        this.oepSet = true
-      }
 
       switch (statement.type) {
         case 'IfStatement':
@@ -1178,6 +1188,23 @@ export default class Compiler {
             case 'AssignmentExpression':
               if (statement.expression.left.type === 'OptionalMemberExpression') {
                 throw 'OPTIONAL_MEMBER_EXPRESSION_NOT_SUPPORTED'
+              }
+              if (
+                statement.expression.left.type === 'MemberExpression' &&
+                statement.expression.left.object.type === 'Identifier' &&
+                statement.expression.left.object.name === 'module' &&
+                statement.expression.left.property.type === 'Identifier' &&
+                statement.expression.left.property.name === 'exports' &&
+                statement.expression.right.type === 'Identifier' &&
+                this.context.isRoot()
+              ) {
+                if (this.isAFunction(statement.expression.right.name)) {
+                  const stub = this.functionTable.get(statement.expression.right.name)
+                  if (stub === undefined) throw 'FUNCTION_STUB_NOT_FOUND'
+                  this.oepStub = stub
+                  break
+                }
+                break
               }
               this.translateVariableAssignment(statement.expression.left, statement.expression.right)
               break
@@ -1246,10 +1273,17 @@ export default class Compiler {
 
   compile() {
     this.buildIR(this.ast.program.body, true)
-    if (!this.oepSet) {
-      console.log(chalk.yellow('The program does not have an valid entry point, the output will be blank!'))
-      return []
+    if (!this.oepStub) {
+      throw new Error('The program does not have an valid entry point')
     }
+    if (
+      this.ir[2].opcode !== Opcode.PUSH ||
+      this.ir[2].args[0].type !== Header.DYN_ADDR ||
+      this.ir[2].args[0].value !== OEP_STUB_ADDR
+    ) {
+      throw new Error('OEP PUSH_ADDR not found at index 2 of IR')
+    }
+    this.ir[2].args[0].value = this.oepStub.index
     return this.ir
   }
 }

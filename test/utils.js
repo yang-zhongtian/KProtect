@@ -1,12 +1,13 @@
-const VM = require('@kprotect/vm')
-const {protect} = require('@kprotect/compiler')
+const {readFileSync} = require('node:fs');
+const execSync = require('child_process').execSync;
 
-const runCase = (caseSrc) => {
-    const result = protect(caseSrc);
-    const vm = new VM(window, result.bytecode, result.strings)
-    vm.start()
+const makeVM = (codePath, outputPath) => {
+    execSync(`npm run protect -- -s ${codePath} -o ${outputPath}`, {cwd: '../'})
+    const scriptContent = readFileSync(outputPath, 'utf8').toString();
+    eval(scriptContent);
+    return VM.start;
 }
 
 module.exports = {
-    runCase
+    makeVM
 }

@@ -22,4 +22,4 @@ function crc32(str) {
     return (crc ^ (-1)) >>> 0;
 }
 
-console.log(crc32("Hello, world!"));
+module.exports = crc32;
