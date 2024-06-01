@@ -2,18 +2,30 @@ import * as babel from '@babel/core'
 import { parse } from '@babel/parser'
 import { Header, Opcode } from './constant.js'
 
+/**
+ * Header is used to identify the type of the argument
+ * @example LOAD_NUMBER, LOAD_STRING, FETCH_VARIABLE, FETCH_DEPENDENCY
+ */
 export interface InstructionArgument {
   type: Header
   value: any
 }
 
+/**
+ * Opcode is used to identify the type of the instruction
+ * @example ADD, SUB, MUL, DIV, MOD, NOT, POS, NEG, STORE, GET_PROPERTY, SET_PROPERTY
+ */
 export interface Instruction {
   opcode: Opcode
   args: InstructionArgument[]
 }
 
+/**
+ * Stub is a placeholder for a jump instruction
+ * @example CONDITION_ELSE, CONDITION_END, LOOP_START, LOOP_UPDATE, LOOP_END, FUNCTION_START
+ */
 interface Stub {
-  index: number,
+  index: number, // index in the instruction array
   type: StubType
 }
 
@@ -83,7 +95,7 @@ export default class Compiler {
   dependenciesUnderWindow: string[]
   ir: Instruction[]
   private readonly stubStack: Stub[]
-  private stubCounter: number
+  private stubCounter: number // used to differentiate between stubs, not the index of 'stubStack'
   private readonly functionTable: Map<string, Stub>
   private oepStub?: Stub
 
@@ -974,6 +986,13 @@ export default class Compiler {
   }
 
   private translateForLoop(node: babel.types.ForStatement) {
+    // init => begin => test = true => body => update => begin
+    //                   ||
+    //                  false
+    //                   ||
+    //                   \/
+    //                   end
+
     if (node.init) {
       if (node.init.type === 'VariableDeclaration') {
         this.buildIR([node.init])
@@ -989,6 +1008,7 @@ export default class Compiler {
 
     this.appendStubInstruction(this.createAddrStubArgument(stub_begin))
 
+    // node.test != true => jump to stub_end
     this.appendPushInstruction(this.translateExpression(node.test))
     this.appendPushInstruction(this.createAddrStubArgument(stub_end))
     this.appendJmpZeroInstruction()
@@ -1005,7 +1025,7 @@ export default class Compiler {
 
     this.appendStubInstruction(this.createAddrStubArgument(stub_end))
 
-    this.stubStack.splice(-3)
+    this.stubStack.splice(-3) // remove the stub for this loop from the stack, prevent confusion
   }
 
   /**
@@ -1024,19 +1044,20 @@ export default class Compiler {
    * @private
    */
   private translateIfStatement(node: babel.types.IfStatement) {
-    this.appendPushInstruction(this.translateExpression(node.test))
+    this.appendPushInstruction(this.translateExpression(node.test)) // push result of 'test' onto the stack
 
-    if (!node.alternate) {
+    if (!node.alternate) { // if there is no 'else' block
       const stub = this.makeStub(StubType.CONDITION_END)
-      this.appendPushInstruction(this.createAddrStubArgument(stub))
-      this.appendJmpZeroInstruction()
+      this.appendPushInstruction(this.createAddrStubArgument(stub)) // push the address of the end of the condition onto the stack
+      this.appendJmpZeroInstruction() // jump to the end of the condition if the test is false
+      // or else, build the consequent
       if (node.consequent.type === 'BlockStatement') {
         this.buildIR(node.consequent.body)
       } else {
         this.buildIR([node.consequent])
       }
-      this.appendStubInstruction(this.createAddrStubArgument(stub))
-    } else {
+      this.appendStubInstruction(this.createAddrStubArgument(stub)) // append the address of the end of the condition
+    } else { // if there is an 'else' block
       const stub_else = this.makeStub(StubType.CONDITION_ELSE)
       const stub_end = this.makeStub(StubType.CONDITION_END)
       this.appendPushInstruction(this.createAddrStubArgument(stub_else))
@@ -1045,7 +1066,7 @@ export default class Compiler {
       this.buildIR(node.consequent.type === 'BlockStatement' ? node.consequent.body : [node.consequent])
 
       this.appendPushInstruction(this.createAddrStubArgument(stub_end))
-      this.appendJmpInstruction()
+      this.appendJmpInstruction() // jump to the end of the condition if the test is false
       this.appendStubInstruction(this.createAddrStubArgument(stub_else))
 
       this.buildIR(node.alternate.type === 'BlockStatement' ? node.alternate.body : [node.alternate])
@@ -1118,7 +1139,7 @@ export default class Compiler {
     this.functionTable.set(node.id.name, stub)
     this.appendStubInstruction(this.createAddrStubArgument(stub))
 
-    this.context.push()
+    this.context.push() // push a new context for the function
     node.params.forEach((param, index) => {
       switch (param.type) {
         case 'Identifier':
@@ -1146,6 +1167,11 @@ export default class Compiler {
     this.context.pop()
   }
 
+  /**
+   * Build Intermediate Representation
+   * @param statements List of statements
+   * @param isMain Is the main body
+   */
   private buildIR(statements: babel.types.Statement[], isMain = false) {
     if (isMain) {
       const target = this.context.incr()
@@ -1208,7 +1234,7 @@ export default class Compiler {
               }
               this.translateVariableAssignment(statement.expression.left, statement.expression.right)
               break
-            case 'UpdateExpression':
+            case 'UpdateExpression': // ++i, i++, --i, i--
               this.translateExpression(statement.expression)
               // Pop the update result
               this.appendPopInstruction(this.createUndefinedArgument())

@@ -7,6 +7,12 @@ export const enum Header {
   FETCH_PARAMETER,
   LOAD_UNDEFINED,
   LOAD_OBJECT,
+
+  // Dynamic address, used for jump
+  // if it is used in ADDR_STUB instruction: the address of the stub(differentiated by its index (value)) is determined
+  //                                         by the index of the stub in the bytecode and stored in the lookup table
+  // if it is used in Other instruction: the address is determined by looking up the value in the lookup table
+  // if you can not completely understand this, please check file 'assembler.ts'
   DYN_ADDR,
 }
 
@@ -19,7 +25,7 @@ export const enum Opcode {
   NOT,
   POS,
   NEG,
-  STORE,
+  STORE, // Store the value in the stack to the variable
   GET_PROPERTY,
   SET_PROPERTY,
   EXISTS,
