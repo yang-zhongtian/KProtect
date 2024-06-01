@@ -1,24 +1,18 @@
-const {Command} = require('commander');
-const {readFileSync} = require('fs');
 const {disassemble} = require('@kprotect/debugger');
-const path = require("path");
 
-const program = new Command();
-program
-    .option('-s, --source <file>', 'Source file path')
-    .parse(process.argv);
-
-const {source} = program.opts();
-
-if (!source) {
-    console.error('Error: Both source and output file paths are required.');
-    process.exit(1);
+const bundle = {
+    bytecode: new Uint8Array( [
+            31, 101,   0,   0,   0,   0,   0, 0,  0,  0,  37, 103,
+            0,  30, 101,  25,   0,   0,   0, 0,  0,  0,   0,  20,
+            39,   8, 101,   0,   0,   0,   0, 0,  0,  0,   0, 105,
+            0,  30, 103,   0,  33, 101,   1, 0,  0,  0,   0,   0,
+            0,   0,  31, 101,   1,   0,   0, 0,  0,  0,   0,   0,
+            30, 104,   1,  30, 100,   0,   0, 0,  0,  0,   0,   0,
+            0,   9,  30, 104,   1,  30, 103, 1, 16, 31, 106,  30,
+            106,  38
+        ]
+    ),
+    strings: [ 'log' ]
 }
-
-const cwd = process.cwd();
-const absoluteSource = path.resolve(cwd, source);
-
-const src = readFileSync(absoluteSource).toString();
-const bundle = JSON.parse(src);
 const result = disassemble(bundle.bytecode, bundle.strings);
 console.log(result);

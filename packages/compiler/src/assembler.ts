@@ -1,6 +1,5 @@
 import { Instruction, InstructionArgument } from './compiler'
 import { Header, Opcode } from './constant'
-import { zlibSync } from 'fflate'
 
 export interface VirtualMachineArguments {
   bytecode: number[]
@@ -95,7 +94,7 @@ export default class BytecodeCompiler {
     })
   }
 
-  compile(): { bytecode: string; strings: string[] } {
+  compile(): { bytecode: Uint8Array; strings: string[] } {
     const bytes: number[] = []
     this.compileBlock(this.ir, bytes)
     for (let index = 0; index < bytes.length; index++) {
@@ -110,10 +109,9 @@ export default class BytecodeCompiler {
 
     this.bytecode = Uint8Array.from(bytes)
     // console.dir(JSON.stringify(bytes))
-    const buffer: Uint8Array = zlibSync(this.bytecode)
 
     return {
-      bytecode: Buffer.from(buffer).toString('base64'),
+      bytecode: this.bytecode,
       strings: this.strings
     }
   }

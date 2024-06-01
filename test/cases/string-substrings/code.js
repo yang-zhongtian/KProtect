@@ -16,4 +16,4 @@ function countSubstrings(str, substring) {
     return count
 }
 
-console.log(countSubstrings("This is a string", "is"))
+module.exports = countSubstrings

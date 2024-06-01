@@ -1,6 +1,4 @@
 import { Header, Opcode } from '@kprotect/compiler'
-import { unzlibSync } from 'fflate'
-import { toUint8Array } from 'js-base64'
 
 interface Context {
   stack: any[]
@@ -60,25 +58,23 @@ class VMStack {
   }
 }
 
-export default class VM {
+class VM {
   private readonly bytecode: Uint8Array
   private readonly strings: string[]
   private readonly dependencies: any[]
   private readonly vmStack: VMStack
   private programCounter: number
 
-  constructor(localWindow: Window, bytecode: string, strings: string[]) {
-    this.bytecode = this.decodeBytecode(bytecode)
-    this.strings = strings
+  constructor(localWindow: Window) {
+    // @ts-ignore
+    this.bytecode = __BYTECODE_ARRAY__
+    // @ts-ignore
+    this.strings = __STRINGS_ARRAY__
     this.dependencies = [localWindow, console]
     this.vmStack = new VMStack()
     this.programCounter = 0
   }
 
-  private decodeBytecode(bytecode: string): Uint8Array {
-    const intArr = toUint8Array(bytecode)
-    return unzlibSync(intArr)
-  }
 
   private byteArrayToLong(byteArray: Uint8Array): number {
     byteArray.reverse()
@@ -309,20 +305,30 @@ export default class VM {
         this.programCounter = arg$1.tracebackPC + 11 // PUSH LOAD_NUMBER 8_BYTE_ADDR NEXT_OPCODE
         this.vmStack.push(arg$1.stack.pop())
         break
+      case Opcode.HALT:
+        this.programCounter = this.bytecode.length
+        break
       default:
         console.warn(opcode, this.programCounter)
         throw 'UNKNOWN_OPCODE'
     }
   }
 
-  start() {
+  start(...args: any[]) {
+    this.vmStack.push(args)
     while (this.programCounter < this.bytecode.length) {
       const count = this.programCounter++
       // console.log(count)
       const opcode = this.bytecode[count]
       // console.warn(`EXECUTING: ${opcode}`)
-      // console.log(JSON.stringify(this.stack))
+      // console.log(JSON.stringify(this.vmStack))
       this.executeOpcode(opcode)
     }
+    return this.vmStack.pop()
   }
+}
+
+export function start(...args: any[]) {
+  const vm = new VM(window)
+  return vm.start(...args)
 }

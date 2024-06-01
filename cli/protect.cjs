@@ -1,7 +1,8 @@
 const {Command} = require('commander');
 const {readFileSync, writeFileSync} = require('fs');
 const {protect} = require('@kprotect/compiler');
-const path = require("path");
+const {embed} = require('@kprotect/vm');
+const path = require('path');
 
 const program = new Command();
 program
@@ -21,6 +22,9 @@ const absoluteSource = path.resolve(cwd, source);
 const absoluteOutput = path.resolve(cwd, output);
 
 const src = readFileSync(absoluteSource).toString();
-const result = protect(src);
-const string = JSON.stringify(result);
-writeFileSync(absoluteOutput, string);
+
+const {bytecode, strings} = protect(src);
+
+embed(bytecode, strings).then(embedded => {
+    writeFileSync(absoluteOutput, embedded);
+})

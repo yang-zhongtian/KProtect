@@ -1,6 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-const {runCase} = require('./utils');
+const {makeVM} = require('./utils');
 
 function getDirectories(srcPath) {
     return fs.readdirSync(srcPath).map(file => {
@@ -11,25 +11,27 @@ function getDirectories(srcPath) {
 }
 
 const caseDirs = getDirectories(path.join(__dirname, 'cases'));
+const outputDir = path.join(__dirname, 'testing');
+
+if (!fs.existsSync(outputDir)) {
+    fs.mkdirSync(outputDir);
+}
 
 caseDirs.forEach(caseDir => {
     const codePath = path.join(caseDir, 'code.js');
+    const casesPath = path.join(caseDir, 'cases.js');
     const expectPath = path.join(caseDir, 'expect.js');
+    const outputPath = path.join(outputDir, path.basename(caseDir) + '.js');
 
     if (fs.existsSync(codePath) && fs.existsSync(expectPath)) {
-        const code = fs.readFileSync(codePath, 'utf8');
+        const cases = require(casesPath);
         const expected = require(expectPath);
 
         test(`Test case: ${path.basename(caseDir)}`, () => {
-            const logSpy = jest
-                .spyOn(global.console, 'log', undefined)
-                .mockImplementation(() => {
-                })
-            runCase(code);
-            expected.forEach((v) => {
-                expect(logSpy).toHaveBeenCalledWith(v);
-            })
-            logSpy.mockRestore();
+            const fn = makeVM(codePath, outputPath);
+            const result = cases.map(v => fn(...v));
+            expect(result).toEqual(expected);
+            fs.unlinkSync(outputPath);
         });
     }
 });
