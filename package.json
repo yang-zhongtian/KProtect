@@ -9,7 +9,7 @@
     "build:debugger": "yarn workspace @kprotect/debugger build",
     "protect": "node cli/protect.cjs",
     "disassemble": "node cli/disassemble.cjs",
-    "test": "npm run protect -- -s protect/src.js -o protect/bundle.js",
+    "test": "npm run protect -- -i protect/src.js -o protect/bundle.js",
     "unit": "yarn workspace @kprotect/test test"
   },
   "author": "Richard Yang",
