@@ -6,6 +6,5 @@
     "cli",
     "test"
   ],
-  "npmClient": "yarn",
-
+  "npmClient": "yarn"
 }
