@@ -71,7 +71,7 @@ yarn build
 ### Protect JS file
 
 ```shell
-yarn protect -s sourcefile.js -o bundle.js
+yarn protect -i sourcefile.js -o bundle.js
 ```
 
 ## Acknowledgement

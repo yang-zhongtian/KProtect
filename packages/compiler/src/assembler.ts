@@ -44,8 +44,6 @@ export default class BytecodeCompiler {
     switch (header) {
       case Header.LOAD_UNDEFINED:
         return [header]
-      case Header.LOAD_OBJECT:
-        return [header]
       case Header.LOAD_STRING:
         let stringPointer
         if (!this.strings.includes(arg.value)) {

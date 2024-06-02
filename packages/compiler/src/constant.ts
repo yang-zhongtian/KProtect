@@ -6,8 +6,6 @@ export const enum Header {
   FETCH_DEPENDENCY,
   FETCH_PARAMETER,
   LOAD_UNDEFINED,
-  LOAD_OBJECT,
-
   // Dynamic address, used for jump
   // if it is used in ADDR_STUB instruction: the address of the stub(differentiated by its index (value)) is determined
   //                                         by the index of the stub in the bytecode and stored in the lookup table
@@ -51,8 +49,10 @@ export const enum Opcode {
   POP,
   INIT_CONSTRUCTOR,
   BUILD_ARRAY,
+  BUILD_OBJECT,
   VOID,
   THROW,
+  NEW,
   DELETE,
   PUSH_STACK_FRAME,
   POP_STACK_FRAME,

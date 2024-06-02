@@ -121,10 +121,6 @@ class VM {
 
       case Header.LOAD_UNDEFINED:
         return undefined
-
-      case Header.LOAD_OBJECT:
-        return {}
-
     }
   }
 
@@ -289,11 +285,26 @@ class VM {
         }
         this.vmStack.push(arr)
         break
+      case Opcode.BUILD_OBJECT:
+        arg$1 = this.getValue()
+        const obj = {}
+        for (let i = 0; i < arg$1; i++) {
+          const value = this.vmStack.pop()
+          const key = this.vmStack.pop()
+          obj[key] = value
+        }
+        this.vmStack.push(obj)
+        break
       case Opcode.VOID:
         throw 'UNFINISHED'
       case Opcode.THROW:
         arg$1 = this.vmStack.pop()
         throw arg$1
+      case Opcode.NEW:
+        arg$1 = this.vmStack.pop()
+        arg$2 = this.getValue()
+        this.vmStack.push(new arg$1(...arg$2))
+        break
       case Opcode.DELETE:
         throw 'UNFINISHED'
       case Opcode.PUSH_STACK_FRAME:

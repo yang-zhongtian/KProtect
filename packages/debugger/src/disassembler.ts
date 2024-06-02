@@ -70,14 +70,8 @@ export default class Disassembler {
         }
         return `undefined`
 
-      case Header.LOAD_OBJECT:
-        if (!withType) {
-          return {}
-        }
-        return `OBJECT({})`
-
       default:
-        throw new Error(`Unknown header: ${header}`)
+        throw new Error(`Unknown header: ${header}, PC: ${this.programCounter}`)
     }
   }
 
@@ -197,11 +191,19 @@ export default class Disassembler {
         value = this.getValue(false)
         this.log(`BUILD_ARRAY ${value}`)
         break
+      case Opcode.BUILD_OBJECT:
+        value = this.getValue(false)
+        this.log(`BUILD_OBJECT ${value}`)
+        break
       case Opcode.VOID:
         this.log('VOID')
         break
       case Opcode.THROW:
         this.log('THROW')
+        break
+      case Opcode.NEW:
+        value = this.getValue(false)
+        this.log(`NEW ${value}`)
         break
       case Opcode.DELETE:
         this.log('DELETE')

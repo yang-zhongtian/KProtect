@@ -354,7 +354,7 @@ export default class Compiler {
         }
 
       case 'ArrayExpression':
-        return this.createVariableArgument(this.buildArgumentsListVariable(node.elements))
+        return this.createVariableArgument(this.buildListVariable(node.elements))
 
       case 'ConditionalExpression':
         this.appendPushInstruction(this.translateExpression(node.test))
@@ -391,6 +391,35 @@ export default class Compiler {
         target = this.context.incr()
         this.appendPopInstruction(this.createNumberArgument(target))
         return this.createVariableArgument(target)
+
+      case 'NewExpression':
+        if (node.callee.type !== 'Identifier') {
+          throw 'UNHANDLED_NEW_EXPRESSION'
+        }
+        if (!this.isADependencyUnderWindow(node.callee.name)) {
+          throw 'UNHANDLED_NEW_EXPRESSION'
+        }
+
+        target = this.context.incr()
+        this.appendPushInstruction(this.createDependencyArgument(this.getDependencyPointer('window')))
+        this.appendPushInstruction(this.createStringArgument(node.callee.name))
+        this.appendGetPropertyInstruction()
+
+        node.arguments.forEach(argument => {
+          this.appendPushInstruction(this.translateExpression(argument))
+        })
+        this.appendBuildArrayInstruction(this.createNumberArgument(node.arguments.length))
+        this.appendPopInstruction(this.createNumberArgument(target))
+
+        this.pushInstruction({
+          opcode: Opcode.NEW,
+          args: [this.createVariableArgument(target)]
+        })
+        this.appendPopInstruction(this.createNumberArgument(target))
+        return this.createVariableArgument(target)
+
+      case 'ObjectExpression':
+        return this.createVariableArgument(this.buildObjectVariable(node.properties))
 
       default:
         throw `UNHANDLED_VALUE ${node.type}`
@@ -442,6 +471,13 @@ export default class Compiler {
   private appendBuildArrayInstruction(arg: InstructionArgument) {
     this.pushInstruction({
       opcode: Opcode.BUILD_ARRAY,
+      args: [arg]
+    })
+  }
+
+  private appendBuildObjectInstruction(arg: InstructionArgument) {
+    this.pushInstruction({
+      opcode: Opcode.BUILD_OBJECT,
       args: [arg]
     })
   }
@@ -927,11 +963,11 @@ export default class Compiler {
   }
 
   /**
-   * Build arguments list variable
+   * Build list variable
    * @param args Arguments list
    * @return {number} Target variable ptr
    */
-  private buildArgumentsListVariable(args: Array<babel.types.Expression | babel.types.SpreadElement | babel.types.JSXNamespacedName | babel.types.ArgumentPlaceholder>): number {
+  private buildListVariable(args: babel.types.ArrayExpression['elements']): number {
     args.forEach(argument => {
       this.appendPushInstruction(this.translateExpression(argument))
     })
@@ -942,8 +978,37 @@ export default class Compiler {
     return target
   }
 
+  /**
+   * Build object variable
+   * @param properties Properties list
+   * @return {number} Target variable ptr
+   */
+  private buildObjectVariable(properties: babel.types.ObjectExpression['properties']): number {
+    properties.forEach(property => {
+      if (property.type !== 'ObjectProperty') throw 'UNHANDLED_PROPERTY_TYPE'
+      if (property.key.type === 'PrivateName') throw 'UNHANDLED_PRIVATE_NAME'
+      this.appendPushInstruction(this.translateExpression(property.key))
+      if (property.value.type === 'RestElement' ||
+        property.value.type === 'ArrayPattern' ||
+        property.value.type === 'AssignmentPattern' ||
+        property.value.type === 'ObjectPattern'
+      ) {
+        throw 'UNHANDLED_PROPERTY_VALUE_TYPE'
+      }
+      this.appendPushInstruction(this.translateExpression(property.value))
+    })
+
+    this.appendBuildObjectInstruction(this.createNumberArgument(properties.length))
+    const target = this.context.incr()
+    this.appendPopInstruction(this.createNumberArgument(target))
+    return target
+  }
+
   private pushCallExpressionOntoStack(node: babel.types.CallExpression) {
-    const targetOfCallArguments = this.buildArgumentsListVariable(node.arguments)
+    if (node.arguments.some(arg => arg.type === 'ArgumentPlaceholder')) {
+      throw 'UNHANDLED_ARGUMENT_PLACEHOLDER'
+    }
+    const targetOfCallArguments = this.buildListVariable(node.arguments as Array<babel.types.SpreadElement | babel.types.Expression>)
 
     switch (node.callee.type) {
       case 'MemberExpression':
