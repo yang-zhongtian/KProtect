@@ -13,9 +13,15 @@ function getDirectories(srcPath) {
 const caseDirs = getDirectories(path.join(__dirname, 'cases'));
 const outputDir = path.join(__dirname, 'testing');
 
-if (!fs.existsSync(outputDir)) {
-    fs.mkdirSync(outputDir);
-}
+beforeAll(() => {
+    if (!fs.existsSync(outputDir)) {
+        fs.mkdirSync(outputDir);
+    }
+});
+
+afterAll(() => {
+    fs.rmSync(outputDir, {recursive: true});
+});
 
 caseDirs.forEach(caseDir => {
     const codePath = path.join(caseDir, 'code.js');
@@ -31,7 +37,6 @@ caseDirs.forEach(caseDir => {
             const fn = makeVM(codePath, outputPath);
             const result = cases.map(v => fn(...v));
             expect(result).toEqual(expected);
-            fs.unlinkSync(outputPath);
         });
     }
 });

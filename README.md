@@ -22,11 +22,11 @@ production environment.
 └──────────┴───────────┴───────────────────┘
 ```
 
-### IL structure
+### IR structure
 
 ```text
 ┌──────────────────────────────────────────┐
-│  Intermediate Language Structure (Dict)  │
+│                 IR (Dict)                │
 ├──────────────────────────────────────────┤
 │ [String] key: the name of this block     │
 │ [ Dict ] val: the data of this block     │
@@ -71,7 +71,7 @@ yarn build
 ### Protect JS file
 
 ```shell
-yarn protect -s sourcefile.js -o bundle.json
+yarn protect -s sourcefile.js -o bundle.js
 ```
 
 ## Acknowledgement
