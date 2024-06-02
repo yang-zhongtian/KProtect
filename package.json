@@ -27,5 +27,8 @@
       "test"
     ]
   },
-  "packageManager": "yarn@1.22.19"
+  "packageManager": "yarn@1.22.19",
+  "devDependencies": {
+    "lerna": "^8.1.3"
+  }
 }

@@ -1,3 +1,4 @@
+#! /usr/bin/env node
 const {Command} = require('commander');
 const {readFileSync, writeFileSync} = require('fs');
 const {protect} = require('@kprotect/compiler');
@@ -6,7 +7,7 @@ const path = require('path');
 
 const program = new Command();
 program
-    .option('-s, --source <file>', 'Source file path')
+    .option('-i, --input <file>', 'Input file path')
     .option('-o, --output <file>', 'Output file path')
     .parse(process.argv);
 
