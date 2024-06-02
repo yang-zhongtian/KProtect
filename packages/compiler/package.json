@@ -7,16 +7,11 @@
   },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "publishConfig": {
-    "access": "public",
-    "registry": "https://registry.npmjs.org/"
-  },
   "devDependencies": {
     "@babel/core": "^7.20.12",
     "@babel/preset-env": "^7.20.2",
     "@types/babel__core": "^7.1.20",
     "@types/node": "^20.12.11",
     "typescript": "^5.1.6"
-  },
-  "gitHead": "a8d1a140281ced2cc3e6c4c8b7b2edc10802f41c"
+  }
 }
