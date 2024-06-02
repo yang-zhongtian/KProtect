@@ -933,7 +933,7 @@ export default class Compiler {
 
     switch (node.property.type) {
       case 'Identifier':
-        if (this.isVariableInitialized(node.property.name)) {
+        if (node.computed && this.isVariableInitialized(node.property.name)) {
           const reg = this.context.get(node.property.name)
           if (reg === undefined) {
             console.error(node.property.name)
