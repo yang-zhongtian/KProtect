@@ -5,7 +5,12 @@
   "bin": {
     "kprotect": "./cli/protect.cjs"
   },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
   "dependencies": {
     "commander": "^12.0.0"
-  }
+  },
+  "gitHead": "a8d1a140281ced2cc3e6c4c8b7b2edc10802f41c"
 }
